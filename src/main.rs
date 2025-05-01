@@ -1,11 +1,12 @@
 use std::{fs, process::ExitCode};
 
 mod scanner;
+mod tokens;
+
+use scanner::Scanner;
 
 fn main() -> ExitCode {
   let args: Vec<String> = std::env::args().collect();
-
-  println!("len: {}", args.len());
 
   // TODO - handle both cargo run & regular script running
   // with cargo run, 'run' is arg 1
@@ -28,13 +29,31 @@ fn main() -> ExitCode {
 }
 
 fn read_file(file_name: &String) -> Result<(), String> {
-  let contents = match fs::read_to_string(file_name) {
+  let source = match fs::read_to_string(file_name) {
     Err(_) => return Err(String::from("couldn't read file {file_name}")),
     Ok(contents) => contents,
   };
 
-  println!("contnets: {contents}");
-  let _tokens = scanner::scan(contents);
+  let scanner = Scanner::scan(source);
+
+  if scanner.errors.len() > 0 {
+    println!("finished with errors: ");
+    for error in scanner.errors {
+      println!(
+        "'{}' at line {} column {}",
+        error.message, error.line, error.column,
+      )
+    }
+  }
+
+  println!("tokens: ");
+  for token in scanner.tokens {
+    match token {
+      _ => {
+        println!("{:?}", &token.token_type);
+      }
+    }
+  }
 
   Ok(())
 }

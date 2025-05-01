@@ -1,79 +1,45 @@
-use std::str::Chars;
+use lazy_static::lazy_static;
+use std::collections::HashMap;
 
-enum TokenType {
-  // Single-character tokens.
-  LeftParen,
-  RightParen,
-  LeftBrace,
-  RightBrace,
-  Comma,
-  Dot,
-  Minus,
-  Plus,
-  Semicolon,
-  Slash,
-  Star,
+use super::tokens::{Token, TokenType};
 
-  // One or two character tokens.
-  Bang,
-  BangEqual,
-  Equal,
-  EqualEqual,
-  Greater,
-  GreaterEqual,
-  Less,
-  LessEqual,
-
-  // Literals.
-  Identifier,
-  Str, // string
-  Number,
-
-  // Keywords.
-  And,
-  Class,
-  Else,
-  False,
-  Fun,
-  For,
-  If,
-  Nil,
-  Or,
-  Print,
-  Return,
-  Super,
-  This,
-  True,
-  Var,
-  While,
-
-  Eof,
+lazy_static! {
+  static ref KEYWORDS: HashMap<&'static str, TokenType> = HashMap::from([
+    ("and", TokenType::And), //
+    ("class", TokenType::And), //
+    ("else", TokenType::Else), //
+    ("false", TokenType::False), //
+    ("for", TokenType::For), //
+    ("if", TokenType::If), //
+    ("nil", TokenType::Nil), //
+    ("or", TokenType::Or), //
+    ("print", TokenType::Print), //
+    ("return", TokenType::Return), //
+    ("super", TokenType::Super), //
+    ("this", TokenType::This), //
+    ("true", TokenType::True), //
+    ("var", TokenType::Var), //
+    ("while", TokenType::While), //
+  ]);
 }
 
-pub struct Token {
-  token_type: TokenType,
-  lexeme: String,
-  // final Object literal;
-  line: usize,
+pub struct ScanErr {
+  pub message: String,
+  pub column: usize,
+  pub line: usize,
 }
 
-struct ScanErr {
-  message: String,
-  column: usize,
-  line: usize,
-}
-
-struct Scanner {
+pub struct Scanner {
+  pub tokens: Vec<Token>,
+  pub errors: Vec<ScanErr>,
   source: String,
-  tokens: Vec<Token>,
-  errors: Vec<ScanErr>,
   start: usize,
   current: usize,
   line: usize,
 }
 
 impl Scanner {
-  fn new(source: String) -> Scanner {
+  pub fn new(source: String) -> Scanner {
     Scanner {
       source,
       tokens: Vec::new(),
@@ -84,44 +50,38 @@ impl Scanner {
     }
   }
 
-  fn scan(&mut self) -> Result<Vec<Token>, String> {
-    let mut result = Vec::new();
+  pub fn scan(source: String) -> Scanner {
+    let mut scanner = Scanner::new(source);
+    scanner.start();
+    scanner
+  }
+
+  pub fn start(&mut self) {
+    if self.source.len() == 0 {
+      return;
+    }
+
+    self.scan_token();
 
     while !self.is_at_end() {
       // we are at the beginning of the next lexeme
+      self.advance_char();
       self.start = self.current;
-      match self.scan_token() {
-        Err(message) => {
-          // TODO - add error to errors
-          self.errors.push(ScanErr {
-            message,
-            line: self.line,
-            // TODO - I think this is wrong
-            column: self.current,
-          });
-        }
-        _ => (),
-      }
+
+      self.scan_token();
     }
 
-    result.push(Token {
+    self.tokens.push(Token {
       token_type: TokenType::Eof,
       lexeme: String::from(""),
       line: self.line,
     });
-
-    Ok(result)
   }
 
-  fn is_at_end(&self) -> bool {
-    self.current >= self.source.len()
-  }
-
-  fn scan_token(&mut self) -> Result<(), String> {
+  fn scan_token(&mut self) {
     use TokenType::*;
-    let c = self.advance();
 
-    println!("c: {c}");
+    let c = self.current_char();
     match c {
       '(' => self.add_token(LeftParen),
       ')' => self.add_token(RightParen),
@@ -134,46 +94,166 @@ impl Scanner {
       ';' => self.add_token(Semicolon),
       '*' => self.add_token(Star),
       '!' => {
-        let token = if self.matches('=') { BangEqual } else { Bang };
+        let token = if self.match_next_char('=') {
+          BangEqual
+        } else {
+          Bang
+        };
         self.add_token(token);
       }
       '=' => {
-        let token = if self.matches('=') { EqualEqual } else { Equal };
+        let token = if self.match_next_char('=') {
+          EqualEqual
+        } else {
+          Equal
+        };
         self.add_token(token);
       }
       '<' => {
-        let token = if self.matches('=') { LessEqual } else { Less };
+        let token = if self.match_next_char('=') {
+          LessEqual
+        } else {
+          Less
+        };
         self.add_token(token);
       }
       '>' => {
-        let token = if self.matches('=') {
+        let token = if self.match_next_char('=') {
           GreaterEqual
         } else {
           Greater
         };
         self.add_token(token);
       }
-      _ => return Err(std::string::String::from("Unrecognized character: '{c}'")),
+      '/' => {
+        if self.match_next_char('/') {
+          // A comment goes until the end of the line
+          while self.peek(1) != '\n' && !self.is_at_end() {
+            self.advance_char();
+          }
+        }
+      }
+      '"' => self.string(),
+      '0'..='9' => self.number(),
+      // Ignore whitespace
+      ' ' | '\r' | '\t' => {}
+      '\n' => {
+        self.line += 1;
+      }
+      c => {
+        if is_alpha(c) {
+          self.identifier();
+        } else {
+          self.add_error(String::from(format!("Unrecognized character: '{c}'")));
+        }
+      }
     }
-
-    Ok(())
   }
 
-  fn matches(&mut self, expected: char) -> bool {
+  fn identifier(&mut self) {
+    while is_alphanumeric(self.peek(1)) {
+      self.advance_char();
+    }
+
+    let text = self.get_current_substr();
+    let token_type = match KEYWORDS.get(&text.as_str()) {
+      Some(token_type) => token_type.clone(),
+      None => TokenType::Identifier(text),
+    };
+
+    self.add_token(token_type);
+  }
+
+  // TODO - better name (this is what it's called in the book)
+  fn number(&mut self) {
+    //
+    while is_digit(self.peek(1)) {
+      self.advance_char();
+    }
+
+    // Look for a fractional part.
+    if self.peek(1) == '.' && is_digit(self.peek(2)) {
+      // consume the "."
+      self.advance_char();
+
+      while is_digit(self.peek(1)) {
+        self.advance_char();
+      }
+    }
+
+    let current_substr = self.get_current_substr();
+
+    // TODO - don't unwrap
+    let value = current_substr.as_str().parse::<f32>().unwrap();
+    self.add_token(TokenType::Number(value));
+  }
+
+  // TODO - better name (this is what it's called in the book)
+  fn string(&mut self) {
+    while self.peek(1) != '"' && !self.is_at_end() {
+      if self.peek(1) == '\n' {
+        self.line += 1;
+      }
+
+      self.advance_char();
+    }
+
     if self.is_at_end() {
-      false
-    } else if self.current_char() != expected {
-      false
-    } else {
+      self.add_error(String::from("Unterminated string"));
+      return;
+    }
+
+    // The closing ".
+    self.advance_char();
+
+    // +1 and -1 to remove quotes
+    let string_value = get_char_substr(&self.source, self.start + 1, self.current - 1);
+    let value = TokenType::Str(string_value);
+    self.add_token(value);
+  }
+
+  fn add_error(&mut self, message: String) {
+    self.errors.push(ScanErr {
+      message,
+      line: self.line,
+      // TODO - I think this is wrong
+      column: self.current,
+    });
+  }
+
+  fn is_at_end(&self) -> bool {
+    self.current >= self.source.len() - 1
+  }
+
+  fn match_next_char(&mut self, expected: char) -> bool {
+    if self.is_at_end() {
+      return false;
+    }
+
+    if self.peek(1) == expected {
       self.current += 1;
       true
+    } else {
+      false
     }
   }
 
-  fn advance(&mut self) -> char {
-    let c = self.current_char();
+  // Deviating from the book slightly, but I don't like how in the book this method
+  // 1) is just named 'advance'
+  // 2) increments like this (in java) "source[current++]", so the character returned is actually for the previous character to self.current
+  fn advance_char(&mut self) -> char {
     self.current += 1;
-    c
+    self.current_char()
+  }
+
+  // The book's version of peek doesn't take this distance parameter because it wants to make a point of how
+  // the interpreter only looks ahead at most 2 characters. I think this is clea(r,n)er
+  fn peek(&self, distance: usize) -> char {
+    if self.current + distance >= self.source.len() {
+      '\0'
+    } else {
+      self.char_at(self.current + distance)
+    }
   }
 
   fn add_token(&mut self, token_type: TokenType) {
@@ -193,8 +273,26 @@ impl Scanner {
   fn current_char(&self) -> char {
     self.char_at(self.current)
   }
+
+  fn get_current_substr(&self) -> String {
+    get_char_substr(&self.source, self.start, self.current)
+  }
 }
 
-pub fn scan(source: String) -> Result<Vec<Token>, String> {
-  Scanner::new(source).scan()
+fn is_alpha(c: char) -> bool {
+  (c >= 'a' && c <= 'z') || // lowercase
+  (c >= 'A' && c <= 'Z') || // uppercase
+  c == '_'
+}
+
+fn is_digit(c: char) -> bool {
+  c >= '0' && c <= '9'
+}
+
+fn is_alphanumeric(c: char) -> bool {
+  is_alpha(c) || is_digit(c)
+}
+
+fn get_char_substr(s: &String, start: usize, end: usize) -> String {
+  s.as_str()[start..=end].to_string()
 }
