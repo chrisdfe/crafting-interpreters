@@ -1,6 +1,7 @@
 use std::{fs, process::ExitCode};
 
 mod expressions;
+mod interpreter;
 mod literals;
 mod parser;
 mod scanner;
