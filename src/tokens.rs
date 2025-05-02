@@ -1,3 +1,5 @@
+use crate::literals::LiteralValue;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
   // Single-character tokens.
@@ -24,9 +26,9 @@ pub enum TokenType {
   LessEqual,
 
   // Literals.
-  Identifier(String),
-  Str(String),
-  Number(f32),
+  Identifier,
+  Str,
+  Num,
 
   // Keywords.
   And,
@@ -49,10 +51,12 @@ pub enum TokenType {
   Eof,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Token {
   pub token_type: TokenType,
   pub lexeme: String,
   // final Object literal;
+  pub literal: LiteralValue,
   pub line: usize,
+  pub column: usize,
 }

@@ -1,7 +1,8 @@
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
-use super::tokens::{Token, TokenType};
+use crate::literals::LiteralValue;
+use crate::tokens::{Token, TokenType};
 
 lazy_static! {
   static ref KEYWORDS: HashMap<&'static str, TokenType> = HashMap::from([
@@ -74,15 +75,16 @@ impl Scanner {
     self.tokens.push(Token {
       token_type: TokenType::Eof,
       lexeme: String::from(""),
+      literal: LiteralValue::Nil,
       line: self.line,
+      column: self.current % self.line,
     });
   }
 
   fn scan_token(&mut self) {
     use TokenType::*;
 
-    let c = self.current_char();
-    match c {
+    match self.current_char() {
       '(' => self.add_token(LeftParen),
       ')' => self.add_token(RightParen),
       '{' => self.add_token(LeftBrace),
@@ -131,6 +133,8 @@ impl Scanner {
           while self.peek(1) != '\n' && !self.is_at_end() {
             self.advance_char();
           }
+        } else {
+          self.add_token(Slash);
         }
       }
       '"' => self.string(),
@@ -158,7 +162,7 @@ impl Scanner {
     let text = self.get_current_substr();
     let token_type = match KEYWORDS.get(&text.as_str()) {
       Some(token_type) => token_type.clone(),
-      None => TokenType::Identifier(text),
+      None => TokenType::Identifier,
     };
 
     self.add_token(token_type);
@@ -185,7 +189,7 @@ impl Scanner {
 
     // TODO - don't unwrap
     let value = current_substr.as_str().parse::<f32>().unwrap();
-    self.add_token(TokenType::Number(value));
+    self.add_literal_token(TokenType::Num, LiteralValue::Num(value));
   }
 
   // TODO - better name (this is what it's called in the book)
@@ -208,8 +212,8 @@ impl Scanner {
 
     // +1 and -1 to remove quotes
     let string_value = get_char_substr(&self.source, self.start + 1, self.current - 1);
-    let value = TokenType::Str(string_value);
-    self.add_token(value);
+    let value = TokenType::Str;
+    self.add_literal_token(value, LiteralValue::Str(string_value));
   }
 
   fn add_error(&mut self, message: String) {
@@ -257,12 +261,24 @@ impl Scanner {
   }
 
   fn add_token(&mut self, token_type: TokenType) {
-    // TODO - does this need to be current + 1?
-    let text = String::from(&self.source[self.start..self.current]);
+    let text = String::from(get_char_substr(&self.source, self.start, self.current));
     self.tokens.push(Token {
       token_type,
+      literal: LiteralValue::Nil,
       lexeme: text,
       line: self.line,
+      column: self.current % self.line,
+    });
+  }
+
+  fn add_literal_token(&mut self, token_type: TokenType, literal: LiteralValue) {
+    let text = String::from(get_char_substr(&self.source, self.start, self.current));
+    self.tokens.push(Token {
+      token_type,
+      literal,
+      lexeme: text,
+      line: self.line,
+      column: self.current % self.line,
     });
   }
 

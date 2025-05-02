@@ -1,13 +1,13 @@
 use std::{fs, process::ExitCode};
 
 mod expressions;
+mod literals;
 mod parser;
 mod scanner;
 mod tokens;
 
-use expressions::*;
+use parser::Parser;
 use scanner::Scanner;
-use tokens::{Token, TokenType};
 
 fn main() -> ExitCode {
   let args: Vec<String> = std::env::args().collect();
@@ -25,33 +25,13 @@ fn main() -> ExitCode {
     return ExitCode::from(64);
   }
 
-  let expr = Expr::Binary(
-    Box::new(Expr::Unary(
-      Token {
-        token_type: TokenType::Minus,
-        lexeme: String::from("-"),
-        line: 1,
-      },
-      Box::new(Expr::Literal(LiteralValue::Num(123.))),
-    )),
-    Token {
-      token_type: TokenType::Star,
-      lexeme: String::from("*"),
-      line: 1,
-    },
-    Box::new(Expr::Grouping(Box::new(Expr::Literal(LiteralValue::Num(
-      45.67,
-    ))))),
-  );
-
-  println!("{}", expr.to_string());
-
-  // let _ = match read_file(&args[1]) {
-  //   Err(_) => {
-  //     return ExitCode::FAILURE;
-  //   }
-  //   Ok(_) => 1,
-  // };
+  let _ = match read_file(&args[1]) {
+    Err(_) => {
+      println!("Couldn't read file '{}'", &args[1]);
+      return ExitCode::FAILURE;
+    }
+    Ok(_) => 1,
+  };
 
   ExitCode::SUCCESS
 }
@@ -62,24 +42,42 @@ fn read_file(file_name: &String) -> Result<(), String> {
     Ok(contents) => contents,
   };
 
+  println!("scanning.");
   let scanner = Scanner::scan(source);
 
   if scanner.errors.len() > 0 {
-    println!("finished with errors: ");
+    println!("scanner errors: ");
     for error in scanner.errors {
       println!(
         "'{}' at line {} column {}",
         error.message, error.line, error.column,
       )
     }
+    return Err(String::from("couldn't scan file"));
   }
 
-  println!("tokens: ");
-  for token in scanner.tokens {
+  /*
+  println!("scanner tokens: ");
+  for token in scanner.tokens.iter() {
     match token {
       _ => {
-        println!("{:?}", &token.token_type);
+        println!("{:?}", &token);
       }
+    }
+  }
+  */
+
+  let mut parser = Parser::new(scanner.tokens);
+
+  println!("\nparsing.");
+
+  match parser.parse() {
+    Ok(expr) => {
+      println!("parsing successful");
+      println!("{}", expr.to_string());
+    }
+    Err(err) => {
+      println!("Parsing error: {}", err.full_text());
     }
   }
 
