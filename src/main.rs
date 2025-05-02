@@ -4,7 +4,9 @@ mod expression;
 mod scanner;
 mod tokens;
 
+use expression::*;
 use scanner::Scanner;
+use tokens::{Token, TokenType};
 
 fn main() -> ExitCode {
   let args: Vec<String> = std::env::args().collect();
@@ -17,14 +19,42 @@ fn main() -> ExitCode {
   }
 
   // args[0] will be 'run', so args[1] is the one we want
-  if args.len() == 2 {
-    let _ = match read_file(&args[1]) {
-      Err(_) => {
-        return ExitCode::FAILURE;
-      }
-      Ok(_) => 1,
-    };
+  if args.len() < 2 {
+    println!("filename arg required");
+    return ExitCode::from(64);
   }
+
+  let expr = BinaryExpression {
+    left: Box::new(UnaryExpression {
+      operator: Token {
+        token_type: TokenType::Minus,
+        lexeme: String::from("-"),
+        line: 1,
+      },
+      right: Box::new(LiteralExpression {
+        value: LiteralValue::Num(123.),
+      }),
+    }),
+    operator: Token {
+      token_type: TokenType::Star,
+      lexeme: String::from("*"),
+      line: 1,
+    },
+    right: Box::new(GroupingExpression {
+      expr: Box::new(LiteralExpression {
+        value: LiteralValue::Num(45.67),
+      }),
+    }),
+  };
+
+  println!("{}", expr.to_string());
+
+  // let _ = match read_file(&args[1]) {
+  //   Err(_) => {
+  //     return ExitCode::FAILURE;
+  //   }
+  //   Ok(_) => 1,
+  // };
 
   ExitCode::SUCCESS
 }
