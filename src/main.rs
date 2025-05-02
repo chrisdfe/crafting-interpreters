@@ -5,7 +5,7 @@ mod parser;
 mod scanner;
 mod tokens;
 
-use expression::*;
+use expressions::*;
 use scanner::Scanner;
 use tokens::{Token, TokenType};
 
@@ -25,28 +25,24 @@ fn main() -> ExitCode {
     return ExitCode::from(64);
   }
 
-  let expr = BinaryExpression {
-    left: Box::new(UnaryExpression {
-      operator: Token {
+  let expr = Expr::Binary(
+    Box::new(Expr::Unary(
+      Token {
         token_type: TokenType::Minus,
         lexeme: String::from("-"),
         line: 1,
       },
-      right: Box::new(LiteralExpression {
-        value: LiteralValue::Num(123.),
-      }),
-    }),
-    operator: Token {
+      Box::new(Expr::Literal(LiteralValue::Num(123.))),
+    )),
+    Token {
       token_type: TokenType::Star,
       lexeme: String::from("*"),
       line: 1,
     },
-    right: Box::new(GroupingExpression {
-      expr: Box::new(LiteralExpression {
-        value: LiteralValue::Num(45.67),
-      }),
-    }),
-  };
+    Box::new(Expr::Grouping(Box::new(Expr::Literal(LiteralValue::Num(
+      45.67,
+    ))))),
+  );
 
   println!("{}", expr.to_string());
 

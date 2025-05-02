@@ -4,40 +4,32 @@ use super::tokens::Token;
 
 // https://craftinginterpreters.com/representing-code.html#metaprogramming-the-trees
 
-pub trait Expr {
-  fn to_string(&self) -> String {
-    String::from("")
-  }
+pub enum Expr {
+  // left, operator, right
+  Binary(Box<Expr>, Token, Box<Expr>),
+  // expr
+  Grouping(Box<Expr>),
+  Literal(LiteralValue),
+  // operator, right
+  Unary(Token, Box<Expr>),
 }
 
-// left: &'a Expr<'a>,
-// operator: Token,
-// right: &'a Expr<'a>,
-
-pub struct BinaryExpression {
-  pub left: Box<dyn Expr>,
-  pub operator: Token,
-  pub right: Box<dyn Expr>,
-}
-
-impl Expr for BinaryExpression {
-  fn to_string(&self) -> String {
-    return String::from(format!(
-      "({} {} {})",
-      self.operator.lexeme,
-      self.left.to_string(),
-      self.right.to_string()
-    ));
-  }
-}
-
-pub struct GroupingExpression {
-  pub expr: Box<dyn Expr>,
-}
-
-impl Expr for GroupingExpression {
-  fn to_string(&self) -> String {
-    return String::from(format!("(group {})", self.expr.to_string()));
+impl Expr {
+  pub fn to_string(&self) -> String {
+    use Expr::*;
+    match &self {
+      Binary(left, operator, right) => String::from(format!(
+        "({} {} {})",
+        operator.lexeme,
+        left.to_string(),
+        right.to_string()
+      )),
+      Grouping(expr) => String::from(format!("(group {})", expr.to_string())),
+      Literal(value) => value.to_string(),
+      Unary(operator, right) => {
+        String::from(format!("({} {})", operator.lexeme, right.to_string()))
+      }
+    }
   }
 }
 
@@ -60,30 +52,5 @@ impl Display for LiteralValue {
       Str(s) => write!(f, "{}", s),
       Num(n) => write!(f, "{}", n),
     }
-  }
-}
-
-pub struct LiteralExpression {
-  pub value: LiteralValue,
-}
-
-impl Expr for LiteralExpression {
-  fn to_string(&self) -> String {
-    return String::from(format!("{}", self.value));
-  }
-}
-
-pub struct UnaryExpression {
-  pub operator: Token,
-  pub right: Box<dyn Expr>,
-}
-
-impl Expr for UnaryExpression {
-  fn to_string(&self) -> String {
-    return String::from(format!(
-      "({} {})",
-      self.operator.lexeme,
-      self.right.to_string()
-    ));
   }
 }
