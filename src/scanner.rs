@@ -53,10 +53,10 @@ impl Scanner {
     }
   }
 
-  pub fn scan(source: String) -> Scanner {
+  pub fn scan(source: String) -> Vec<Token> {
     let mut scanner = Scanner::new(source);
     scanner.start();
-    scanner
+    scanner.tokens
   }
 
   pub fn start(&mut self) {

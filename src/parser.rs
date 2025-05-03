@@ -23,7 +23,7 @@ impl ParseErr {
 
   pub fn full_text(&self) -> String {
     format!(
-      "{} At token '{}' on line {} column {}",
+      "parse error: {} At token '{}' on line {} column {}",
       &self.message, &self.token.lexeme, &self.token.line, &self.token.column
     )
   }
@@ -44,14 +44,29 @@ impl Parser {
     Self { tokens, current: 0 }
   }
 
-  pub fn parse(tokens: Vec<Token>) -> ParseStmtResult {
-    Parser::new(tokens).parse_statement()
+  pub fn parse(tokens: Vec<Token>) -> Vec<Stmt> {
+    Parser::new(tokens).parse_statements()
+  }
+
+  fn parse_statements(&mut self) -> Vec<Stmt> {
+    let mut stmts = Vec::new();
+
+    while !self.is_at_end() {
+      match self.parse_statement() {
+        Err(err) => {
+          println!("{}", err.full_text())
+        }
+        Ok(stmt) => {
+          stmts.push(stmt);
+        }
+      }
+    }
+
+    stmts
   }
 
   fn parse_statement(&mut self) -> ParseStmtResult {
-    //
-
-    if self.current_token_matches(TokenType::Print) {
+    if let Some(_) = self.match_and_consume(TokenType::Print) {
       self.parse_print_statement()
     } else {
       //
@@ -68,12 +83,11 @@ impl Parser {
       Ok(value) => value,
     };
 
-    if self.current_token_matches(TokenType::Semicolon) {
-      self.consume_current_token();
-      Ok(Stmt::Print(*value))
-    } else {
-      self.create_parse_stmt_err(String::from("Expect ';' after value."))
+    if self.match_and_consume(TokenType::Semicolon).is_none() {
+      return self.create_parse_stmt_err(String::from("Expect ';' after value."));
     }
+
+    Ok(Stmt::Print(*value))
   }
 
   fn parse_expression_statement(&mut self) -> ParseStmtResult {
@@ -82,12 +96,11 @@ impl Parser {
       Ok(expr) => expr,
     };
 
-    if self.current_token_matches(TokenType::Semicolon) {
-      self.consume_current_token();
-      Ok(Stmt::Expr(*expr))
-    } else {
-      self.create_parse_stmt_err(String::from("Expect ';' after value."))
+    if self.match_and_consume(TokenType::Semicolon).is_none() {
+      return self.create_parse_stmt_err(String::from("Expect ';' after value."));
     }
+
+    Ok(Stmt::Expr(*expr))
   }
 
   fn parse_expression(&mut self) -> ParseExprResult {
@@ -101,9 +114,7 @@ impl Parser {
     };
 
     use TokenType::*;
-    while self.current_token_matches_one_of(vec![BangEqual, EqualEqual]) {
-      let operator = self.consume_current_token();
-
+    while let Some(operator) = self.match_one_of_and_consume(vec![BangEqual, EqualEqual]) {
       let right = match self.parse_comparison() {
         Err(err) => return Err(err),
         Ok(expr) => expr,
@@ -122,9 +133,9 @@ impl Parser {
     };
 
     use TokenType::*;
-    while self.current_token_matches_one_of(vec![Greater, GreaterEqual, Less, LessEqual]) {
-      let operator = self.consume_current_token();
-
+    while let Some(operator) =
+      self.match_one_of_and_consume(vec![Greater, GreaterEqual, Less, LessEqual])
+    {
       let right = match self.parse_term() {
         Err(err) => return Err(err),
         Ok(expr) => expr,
@@ -143,9 +154,7 @@ impl Parser {
     };
 
     use TokenType::*;
-    while self.current_token_matches_one_of(vec![Minus, Plus]) {
-      let operator = self.consume_current_token();
-
+    while let Some(operator) = self.match_one_of_and_consume(vec![Minus, Plus]) {
       let right = match self.parse_factor() {
         Err(err) => return Err(err),
         Ok(expr) => expr,
@@ -164,9 +173,7 @@ impl Parser {
     };
 
     use TokenType::*;
-    while self.current_token_matches_one_of(vec![Slash, Star]) {
-      let operator = self.consume_current_token();
-
+    while let Some(operator) = self.match_one_of_and_consume(vec![Slash, Star]) {
       let right = match self.parse_unary() {
         Err(err) => return Err(err),
         Ok(expr) => expr,
@@ -180,9 +187,7 @@ impl Parser {
 
   fn parse_unary(&mut self) -> ParseExprResult {
     use TokenType::*;
-    if self.current_token_matches_one_of(vec![Bang, Minus]) {
-      let operator = self.consume_current_token();
-
+    if let Some(operator) = self.match_one_of_and_consume(vec![Bang, Minus]) {
       let right = match self.parse_unary() {
         Err(err) => return Err(err),
         Ok(expr) => expr,
@@ -205,14 +210,14 @@ impl Parser {
       Nil => Some(Expr::Literal(LiteralValue::Nil)),
       Num | Str => Some(Expr::Literal(current_token.literal)),
       LeftParen => {
-        self.consume_current_token();
+        self.consume();
 
         let expr = match self.parse_expression() {
           Err(err) => return Err(err),
           Ok(expr) => expr,
         };
 
-        if !self.current_token_matches(RightParen) {
+        if self.match_and_consume(RightParen).is_none() {
           return Err(ParseErr::create(
             &self.current_token(),
             String::from("Expected ) after expression"),
@@ -225,33 +230,48 @@ impl Parser {
     };
 
     if let Some(expr) = expr {
-      self.consume_current_token();
+      self.consume();
       Ok(Box::new(expr))
     } else {
       self.create_parse_expr_err(String::from("Expected expression."))
     }
   }
 
-  fn consume_current_token(&mut self) -> Token {
+  fn consume(&mut self) -> Option<Token> {
     let current = self.current_token();
 
     if !self.is_at_end() {
       self.current += 1;
+      Some(current)
+    } else {
+      None
     }
-
-    current
   }
 
-  fn current_token_matches(&self, token_type: TokenType) -> bool {
-    self.current_token().token_type == token_type
+  fn match_and_consume(&mut self, token_type: TokenType) -> Option<Token> {
+    let token = self.current_token();
+    if token.token_type == token_type {
+      self.consume();
+      Some(token)
+    } else {
+      None
+    }
   }
 
-  fn current_token_matches_one_of(&mut self, token_types: Vec<TokenType>) -> bool {
-    let current_token = self.current_token();
-    token_types
+  fn match_one_of_and_consume(&mut self, token_types: Vec<TokenType>) -> Option<Token> {
+    let token = self.current_token();
+    let matches = token_types
       .into_iter()
-      .find(|token_type| current_token.token_type == *token_type)
-      .is_some()
+      .find(|token_type| token.token_type == *token_type)
+      .is_some();
+
+    if matches {
+      self.consume();
+
+      Some(token)
+    } else {
+      None
+    }
   }
 
   fn is_at_end(&self) -> bool {

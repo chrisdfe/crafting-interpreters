@@ -19,27 +19,37 @@ pub struct Interpreter {}
 // I am currently here
 // https://craftinginterpreters.com/statements-and-state.html
 impl Interpreter {
-  pub fn interpret(stmt: &Stmt) -> String {
-    match Self::evaluate_stmt(&stmt) {
-      // Ok(output) => output.to_string(),
-      Ok(_) => String::from(""),
-      Err(err) => err.message,
+  // TODO - return type shouldn't be string I think
+  pub fn interpret(stmts: Vec<Stmt>) -> String {
+    for stmt in stmts {
+      match Self::execute_stmt(&stmt) {
+        Ok(_) => (),
+        Err(err) => return err.message,
+      };
     }
+
+    String::from("")
   }
 
-  fn evaluate_stmt(stmt: &Stmt) -> Result<(), EvalErr> {
+  fn execute_stmt(stmt: &Stmt) -> Result<(), EvalErr> {
     use Stmt::*;
     match &stmt {
-      Print(str) => {
-        let value = Self::evaluate_expr(expr);
-        println!(format!("{}", value));
-        //
+      Print(expr) => {
+        let value = match Self::evaluate_expr(expr) {
+          Err(err) => return Err(err),
+          Ok(value) => value,
+        };
+
+        println!("{}", value.cast_string());
+
         Ok(())
       }
       Expr(expr) => {
-        //
-        Self::evaluate_expr(expr);
-        Ok(())
+        // println!("expression statement");
+        match Self::evaluate_expr(expr) {
+          Err(err) => return Err(err),
+          Ok(_) => Ok(()),
+        }
       }
     }
   }
@@ -49,9 +59,9 @@ impl Interpreter {
     use TokenType::*;
     match expr {
       Literal(value) => Ok(value.clone()),
-      Grouping(expr) => Self::evaluate(expr),
+      Grouping(expr) => Self::evaluate_expr(expr),
       Unary(operator, right) => {
-        let right = match Self::evaluate(right) {
+        let right = match Self::evaluate_expr(right) {
           Err(err) => return Err(err),
           Ok(right) => right,
         };
@@ -71,12 +81,12 @@ impl Interpreter {
         }
       }
       Binary(left, operator, right) => {
-        let left = match Self::evaluate(&left) {
+        let left = match Self::evaluate_expr(&left) {
           Err(err) => return Err(err),
           Ok(left) => left,
         };
 
-        let right = match Self::evaluate(&right) {
+        let right = match Self::evaluate_expr(&right) {
           Err(err) => return Err(err),
           Ok(right) => right,
         };

@@ -63,18 +63,18 @@ fn read_file(file_name: &String) -> Result<(), String> {
   };
 
   println!("scanning.");
-  let scanner = Scanner::scan(source);
+  // let scanner = Scanner::scan(source);
 
-  if scanner.errors.len() > 0 {
-    println!("scanner errors: ");
-    for error in scanner.errors {
-      println!(
-        "'{}' at line {} column {}",
-        error.message, error.line, error.column,
-      )
-    }
-    return Err(String::from("couldn't scan file"));
-  }
+  // if scanner.errors.len() > 0 {
+  //   println!("scanner errors: ");
+  //   for error in scanner.errors {
+  //     println!(
+  //       "'{}' at line {} column {}",
+  //       error.message, error.line, error.column,
+  //     )
+  //   }
+  //   return Err(String::from("couldn't scan file"));
+  // }
 
   /*
   println!("scanner tokens: ");
@@ -115,10 +115,16 @@ fn read_file(file_name: &String) -> Result<(), String> {
 }
 
 fn interpret_input(input: String) -> String {
-  let scanner = Scanner::scan(input);
+  let tokens = Scanner::scan(input);
 
-  match Parser::parse(scanner.tokens) {
-    Ok(ast) => Interpreter::interpret(&ast),
-    Err(err) => format!("Parsing error: {}", err.full_text()),
+  println!("tokens: {}", tokens.len());
+  for token in tokens.iter() {
+    println!("{:?}", token);
   }
+  let statements = Parser::parse(tokens);
+
+  println!("statements: {}", statements.len());
+  Interpreter::interpret(statements);
+
+  String::from("")
 }
