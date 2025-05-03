@@ -117,13 +117,8 @@ fn read_file(file_name: &String) -> Result<(), String> {
 fn interpret_input(input: String) -> String {
   let tokens = Scanner::scan(input);
 
-  println!("tokens: {}", tokens.len());
-  for token in tokens.iter() {
-    println!("{:?}", token);
-  }
   let statements = Parser::parse(tokens);
 
-  println!("statements: {}", statements.len());
   Interpreter::interpret(statements);
 
   String::from("")

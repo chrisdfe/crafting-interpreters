@@ -229,8 +229,10 @@ impl Parser {
       _ => None,
     };
 
+    // TODO - why do I need this final consume?
+    self.consume();
+
     if let Some(expr) = expr {
-      self.consume();
       Ok(Box::new(expr))
     } else {
       self.create_parse_expr_err(String::from("Expected expression."))
