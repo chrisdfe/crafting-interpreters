@@ -45,15 +45,12 @@ impl LiteralValue {
   }
 
   pub fn cast_float(&self) -> Result<f32, String> {
-    const INVALID_FLOAT_CAST: &'static str = "Invalid cast to float.";
-
     use LiteralValue::*;
     match &self {
-      Nil => Err(format!("Unable to cast '{}' to float", self.to_string())),
-      True => Ok(1.),
-      False => Ok(0.),
+      // True => Ok(1.),
+      // False => Ok(0.),
       Num(n) => Ok(*n),
-      Str(s) => Err(format!("Unable to cast '{}' to float", self.to_string())),
+      _ => Err(format!("Unable to cast '{}' to number", self.to_string())),
     }
   }
 

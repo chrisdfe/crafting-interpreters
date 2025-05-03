@@ -1,4 +1,4 @@
-use std::{fs, process::ExitCode};
+use std::{fs, io::Write, process::ExitCode};
 
 mod expressions;
 mod interpreter;
@@ -7,12 +7,14 @@ mod parser;
 mod scanner;
 mod tokens;
 
+use interpreter::Interpreter;
 use parser::Parser;
 use scanner::Scanner;
 
 fn main() -> ExitCode {
   let args: Vec<String> = std::env::args().collect();
 
+  /*
   // TODO - handle both cargo run & regular script running
   // with cargo run, 'run' is arg 1
   if args.len() > 2 {
@@ -33,6 +35,22 @@ fn main() -> ExitCode {
     }
     Ok(_) => 1,
   };
+  */
+
+  loop {
+    print!(">");
+    let mut input = String::new();
+    let _ = std::io::stdout().flush();
+
+    std::io::stdin()
+      .read_line(&mut input)
+      .expect(&format!("Unable to read line '{}'", &input).to_owned());
+
+    if input.len() > 0 {
+      let result = interpret_input(input);
+      println!("{}", result)
+    }
+  }
 
   ExitCode::SUCCESS
 }
@@ -67,20 +85,40 @@ fn read_file(file_name: &String) -> Result<(), String> {
     }
   }
   */
-
+  /*
   let mut parser = Parser::new(scanner.tokens);
 
   println!("\nparsing.");
 
-  match parser.parse() {
-    Ok(expr) => {
-      println!("parsing successful");
-      println!("{}", expr.to_string());
-    }
-    Err(err) => {
-      println!("Parsing error: {}", err.full_text());
-    }
+  let ast = match parser.parse() {
+    Err(err) => return Err(format!("Parsing error: {}", err.full_text())),
+    Ok(ast) => ast,
+  };
+
+  Interpreter::interpret(&ast); */
+
+  loop {
+    print!(">");
+    let mut input = String::new();
+    let _ = std::io::stdout().flush();
+
+    std::io::stdin()
+      .read_line(&mut input)
+      .expect(&format!("Unable to read line '{}'", &input).to_owned());
+
+    let result = interpret_input(input);
+    println!("{}", result)
   }
 
   Ok(())
+}
+
+fn interpret_input(input: String) -> String {
+  let scanner = Scanner::scan(input);
+  let mut parser = Parser::new(scanner.tokens);
+
+  match parser.parse() {
+    Ok(ast) => Interpreter::interpret(&ast),
+    Err(err) => format!("Parsing error: {}", err.full_text()),
+  }
 }

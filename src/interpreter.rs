@@ -14,39 +14,24 @@ fn eval_err(message: String) -> Result<LiteralValue, EvalErr> {
   Err(EvalErr::new(message))
 }
 
-fn parse_floats_from_binary_expr(
-  left: &LiteralValue,
-  right: &LiteralValue,
-) -> Result<(f32, f32), EvalErr> {
-  let left_as_float = match left.cast_float() {
-    Err(err) => return Err(EvalErr::new(err)),
-    Ok(f) => f,
-  };
-
-  let right_as_float = match right.cast_float() {
-    Err(err) => return Err(EvalErr::new(err)),
-    Ok(f) => f,
-  };
-
-  Ok((left_as_float, right_as_float))
-}
-
-fn is_string_literal(literal: &LiteralValue) -> bool {
-  match literal {
-    LiteralValue::Str(_) => true,
-    _ => false,
-  }
-}
-
-struct Interpreter {}
+pub struct Interpreter {}
 
 // I left off here:
 // https://craftinginterpreters.com/evaluating-expressions.html#evaluating-binary-operators
 impl Interpreter {
-  pub fn evaluate(expr: &Expr) -> Result<LiteralValue, EvalErr> {
+  pub fn interpret(expr: &Expr) -> String {
+    match Self::evaluate(&expr) {
+      Ok(output) => output.to_string(),
+      Err(err) => err.message,
+    }
+  }
+
+  fn evaluate(expr: &Expr) -> Result<LiteralValue, EvalErr> {
     use Expr::*;
     use TokenType::*;
     match expr {
+      Literal(value) => Ok(value.clone()),
+      Grouping(expr) => Self::evaluate(expr),
       Unary(operator, right) => {
         let right = match Self::evaluate(right) {
           Err(err) => return Err(err),
@@ -148,10 +133,30 @@ impl Interpreter {
           }
         }
       }
-      _ => {
-        println!("TODO");
-        return eval_err(format!("TODO"));
-      }
     }
+  }
+}
+
+fn parse_floats_from_binary_expr(
+  left: &LiteralValue,
+  right: &LiteralValue,
+) -> Result<(f32, f32), EvalErr> {
+  let left_as_float = match left.cast_float() {
+    Err(err) => return Err(EvalErr::new(err)),
+    Ok(f) => f,
+  };
+
+  let right_as_float = match right.cast_float() {
+    Err(err) => return Err(EvalErr::new(err)),
+    Ok(f) => f,
+  };
+
+  Ok((left_as_float, right_as_float))
+}
+
+fn is_string_literal(literal: &LiteralValue) -> bool {
+  match literal {
+    LiteralValue::Str(_) => true,
+    _ => false,
   }
 }
