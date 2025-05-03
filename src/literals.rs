@@ -22,8 +22,6 @@ impl Display for LiteralValue {
   }
 }
 
-const INVALID_FLOAT_CAST: &'static str = "Invalid cast to float.";
-
 impl From<bool> for LiteralValue {
   fn from(value: bool) -> Self {
     if value {
@@ -35,8 +33,7 @@ impl From<bool> for LiteralValue {
 }
 
 impl LiteralValue {
-  // TODO - more rust-y way of doing this
-  pub fn to_string(&self) -> String {
+  pub fn cast_string(&self) -> String {
     use LiteralValue::*;
     match &self {
       Nil => String::from("nil"),
@@ -48,6 +45,8 @@ impl LiteralValue {
   }
 
   pub fn cast_float(&self) -> Result<f32, String> {
+    const INVALID_FLOAT_CAST: &'static str = "Invalid cast to float.";
+
     use LiteralValue::*;
     match &self {
       Nil => Err(format!("Unable to cast '{}' to float", self.to_string())),
@@ -77,5 +76,31 @@ impl LiteralValue {
 
   pub fn is_falsey(&self) -> bool {
     !self.is_truthy()
+  }
+
+  pub fn equals(&self, other: &LiteralValue) -> bool {
+    use LiteralValue::*;
+    match &self {
+      Nil => match &other {
+        Nil => true,
+        _ => false,
+      },
+      True => match &other {
+        True => true,
+        _ => false,
+      },
+      False => match &other {
+        False => true,
+        _ => false,
+      },
+      Num(a) => match &other {
+        Num(b) => a == b,
+        _ => false,
+      },
+      Str(a) => match &other {
+        Str(b) => a == b,
+        _ => false,
+      },
+    }
   }
 }

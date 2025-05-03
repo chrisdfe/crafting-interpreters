@@ -1,6 +1,4 @@
-use std::fmt::Display;
-
-use super::{literals::LiteralValue, tokens::Token};
+use crate::{literals::LiteralValue, tokens::Token};
 
 // https://craftinginterpreters.com/representing-code.html#metaprogramming-the-trees
 

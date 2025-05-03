@@ -14,30 +14,28 @@ fn eval_err(message: String) -> Result<LiteralValue, EvalErr> {
   Err(EvalErr::new(message))
 }
 
-fn parse_floats_from_binary_expr(left: &Expr, right: &Expr) -> Result<(f32, f32), EvalErr> {
-  let left_as_literal = match left {
-    Expr::Literal(left) => left,
-    // TODO - more descriptive error message
-    _ => return Err(EvalErr::new(String::from("Invalid left-hand operand type"))),
-  };
-
-  let right_as_literal = match right {
-    Expr::Literal(right) => right,
-    // TODO - more descriptive error message
-    _ => return Err(EvalErr::new(String::from("Invalid left-hand operand type"))),
-  };
-
-  let left_as_float = match left_as_literal.cast_float() {
+fn parse_floats_from_binary_expr(
+  left: &LiteralValue,
+  right: &LiteralValue,
+) -> Result<(f32, f32), EvalErr> {
+  let left_as_float = match left.cast_float() {
     Err(err) => return Err(EvalErr::new(err)),
     Ok(f) => f,
   };
 
-  let right_as_float = match right_as_literal.cast_float() {
+  let right_as_float = match right.cast_float() {
     Err(err) => return Err(EvalErr::new(err)),
     Ok(f) => f,
   };
 
   Ok((left_as_float, right_as_float))
+}
+
+fn is_string_literal(literal: &LiteralValue) -> bool {
+  match literal {
+    LiteralValue::Str(_) => true,
+    _ => false,
+  }
 }
 
 struct Interpreter {}
@@ -69,36 +67,87 @@ impl Interpreter {
           o => eval_err(format!("Unexpected unary operator: {:?}", o)),
         }
       }
-      Binary(left, operator, right) => match &operator.token_type {
-        Minus | Star | Slash => {
-          let (left, right) = match parse_floats_from_binary_expr(left, right) {
-            Err(err) => return Err(err),
-            Ok((left, right)) => (left, right),
-          };
+      Binary(left, operator, right) => {
+        let left = match Self::evaluate(&left) {
+          Err(err) => return Err(err),
+          Ok(left) => left,
+        };
 
-          match &operator.token_type {
-            Minus => Ok(LiteralValue::Num(left - right)),
-            Star => Ok(LiteralValue::Num(left * right)),
-            Slash => Ok(LiteralValue::Num(left / right)),
-            t => return eval_err(format!("unexpected token type: {:?}", t)),
+        let right = match Self::evaluate(&right) {
+          Err(err) => return Err(err),
+          Ok(right) => right,
+        };
+
+        match &operator.token_type {
+          Minus | Star | Slash => {
+            let (left, right) = match parse_floats_from_binary_expr(&left, &right) {
+              Err(err) => return Err(err),
+              Ok((left, right)) => (left, right),
+            };
+
+            match &operator.token_type {
+              Minus => Ok(LiteralValue::Num(left - right)),
+              Star => Ok(LiteralValue::Num(left * right)),
+              Slash => Ok(LiteralValue::Num(left / right)),
+              t => return eval_err(format!("unexpected token type: {:?}", t)),
+            }
+          }
+          Plus => {
+            // attempt string addition
+            if is_string_literal(&left) || is_string_literal(&right) {
+              //
+              let left = &left.cast_string();
+              let right = &right.cast_string();
+
+              let value = format!("{}{}", left, right);
+              return Ok(LiteralValue::Str(value));
+            }
+
+            let (left, right) = match parse_floats_from_binary_expr(&left, &right) {
+              Err(err) => return Err(err),
+              Ok((left, right)) => (left, right),
+            };
+
+            Ok(LiteralValue::Num(left + right))
+          }
+          Greater | GreaterEqual | Less | LessEqual => {
+            let (left, right) = match parse_floats_from_binary_expr(&left, &right) {
+              Err(err) => return Err(err),
+              Ok((left, right)) => (left, right),
+            };
+
+            let value = match &operator.token_type {
+              Greater => left > right,
+              GreaterEqual => left >= right,
+              Less => left < right,
+              LessEqual => left <= right,
+              _ => return eval_err(format!("Unexpected token type: {:?}", &operator.token_type)),
+            };
+
+            let literal_value = if value {
+              LiteralValue::True
+            } else {
+              LiteralValue::False
+            };
+
+            Ok(literal_value)
+          }
+          EqualEqual => {
+            let value = left.equals(&right);
+            Ok(LiteralValue::from(value))
+          }
+          BangEqual => {
+            let value = left.equals(&right);
+            Ok(LiteralValue::from(!value))
+          }
+          t => {
+            return eval_err(format!(
+              "Unexpected operator in binary expression: '{:?}'",
+              t
+            ))
           }
         }
-        Plus => {
-          // TODO - string addition
-          let (left, right) = match parse_floats_from_binary_expr(left, right) {
-            Err(err) => return Err(err),
-            Ok((left, right)) => (left, right),
-          };
-
-          Ok(LiteralValue::Num(left + right))
-        }
-        t => {
-          return eval_err(format!(
-            "Unexpected operator in binary expression: '{:?}'",
-            t
-          ))
-        }
-      },
+      }
       _ => {
         println!("TODO");
         return eval_err(format!("TODO"));
