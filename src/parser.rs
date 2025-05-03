@@ -1,10 +1,12 @@
 use crate::{
   expressions::Expr,
   literals::LiteralValue,
+  statements::Stmt,
   tokens::{Token, TokenType},
 };
 
-pub type ParseResult = Result<Box<Expr>, ParseErr>;
+pub type ParseStmtResult = Result<Stmt, ParseErr>;
+pub type ParseExprResult = Result<Box<Expr>, ParseErr>;
 
 pub struct ParseErr {
   pub token: Token,
@@ -42,15 +44,57 @@ impl Parser {
     Self { tokens, current: 0 }
   }
 
-  pub fn parse(&mut self) -> ParseResult {
-    self.parse_expression()
+  pub fn parse(tokens: Vec<Token>) -> ParseStmtResult {
+    Parser::new(tokens).parse_statement()
   }
 
-  fn parse_expression(&mut self) -> ParseResult {
+  fn parse_statement(&mut self) -> ParseStmtResult {
+    //
+
+    if self.current_token_matches(TokenType::Print) {
+      self.parse_print_statement()
+    } else {
+      //
+      match self.parse_expression_statement() {
+        Ok(stmt) => Ok(stmt),
+        Err(err) => Err(err),
+      }
+    }
+  }
+
+  fn parse_print_statement(&mut self) -> ParseStmtResult {
+    let value = match self.parse_expression() {
+      Err(err) => return Err(err),
+      Ok(value) => value,
+    };
+
+    if self.current_token_matches(TokenType::Semicolon) {
+      self.consume_current_token();
+      Ok(Stmt::Print(*value))
+    } else {
+      self.create_parse_stmt_err(String::from("Expect ';' after value."))
+    }
+  }
+
+  fn parse_expression_statement(&mut self) -> ParseStmtResult {
+    let expr = match self.parse_expression() {
+      Err(err) => return Err(err),
+      Ok(expr) => expr,
+    };
+
+    if self.current_token_matches(TokenType::Semicolon) {
+      self.consume_current_token();
+      Ok(Stmt::Expr(*expr))
+    } else {
+      self.create_parse_stmt_err(String::from("Expect ';' after value."))
+    }
+  }
+
+  fn parse_expression(&mut self) -> ParseExprResult {
     self.parse_equality()
   }
 
-  fn parse_equality(&mut self) -> ParseResult {
+  fn parse_equality(&mut self) -> ParseExprResult {
     let mut expr = match self.parse_comparison() {
       Err(err) => return Err(err),
       Ok(expr) => expr,
@@ -71,7 +115,7 @@ impl Parser {
     Ok(expr)
   }
 
-  fn parse_comparison(&mut self) -> ParseResult {
+  fn parse_comparison(&mut self) -> ParseExprResult {
     let mut expr = match self.parse_term() {
       Err(err) => return Err(err),
       Ok(expr) => expr,
@@ -92,7 +136,7 @@ impl Parser {
     Ok(expr)
   }
 
-  fn parse_term(&mut self) -> ParseResult {
+  fn parse_term(&mut self) -> ParseExprResult {
     let mut expr = match self.parse_factor() {
       Err(err) => return Err(err),
       Ok(expr) => expr,
@@ -113,7 +157,7 @@ impl Parser {
     Ok(expr)
   }
 
-  fn parse_factor(&mut self) -> ParseResult {
+  fn parse_factor(&mut self) -> ParseExprResult {
     let mut expr = match self.parse_unary() {
       Err(err) => return Err(err),
       Ok(expr) => expr,
@@ -134,7 +178,7 @@ impl Parser {
     Ok(expr)
   }
 
-  fn parse_unary(&mut self) -> ParseResult {
+  fn parse_unary(&mut self) -> ParseExprResult {
     use TokenType::*;
     if self.current_token_matches_one_of(vec![Bang, Minus]) {
       let operator = self.consume_current_token();
@@ -150,7 +194,7 @@ impl Parser {
     }
   }
 
-  fn parse_primary(&mut self) -> ParseResult {
+  fn parse_primary(&mut self) -> ParseExprResult {
     use TokenType::*;
 
     let current_token = self.current_token();
@@ -184,10 +228,7 @@ impl Parser {
       self.consume_current_token();
       Ok(Box::new(expr))
     } else {
-      Err(ParseErr::create(
-        &self.current_token(),
-        String::from("Expected expression."),
-      ))
+      self.create_parse_expr_err(String::from("Expected expression."))
     }
   }
 
@@ -224,5 +265,19 @@ impl Parser {
 
   fn current_token(&self) -> Token {
     self.tokens.get(self.current).unwrap().clone()
+  }
+
+  fn create_parse_stmt_err(&self, message: String) -> Result<Stmt, ParseErr> {
+    Err(ParseErr::create(
+      &self.current_token(),
+      String::from(message),
+    ))
+  }
+
+  fn create_parse_expr_err(&self, message: String) -> Result<Box<Expr>, ParseErr> {
+    Err(ParseErr::create(
+      &self.current_token(),
+      String::from(message),
+    ))
   }
 }

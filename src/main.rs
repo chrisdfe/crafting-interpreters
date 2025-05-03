@@ -5,6 +5,7 @@ mod interpreter;
 mod literals;
 mod parser;
 mod scanner;
+mod statements;
 mod tokens;
 
 use interpreter::Interpreter;
@@ -115,9 +116,8 @@ fn read_file(file_name: &String) -> Result<(), String> {
 
 fn interpret_input(input: String) -> String {
   let scanner = Scanner::scan(input);
-  let mut parser = Parser::new(scanner.tokens);
 
-  match parser.parse() {
+  match Parser::parse(scanner.tokens) {
     Ok(ast) => Interpreter::interpret(&ast),
     Err(err) => format!("Parsing error: {}", err.full_text()),
   }

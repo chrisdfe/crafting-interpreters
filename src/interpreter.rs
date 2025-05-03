@@ -1,4 +1,4 @@
-use crate::{expressions::Expr, literals::LiteralValue, tokens::TokenType};
+use crate::{expressions::Expr, literals::LiteralValue, statements::Stmt, tokens::TokenType};
 
 struct EvalErr {
   message: String,
@@ -19,14 +19,32 @@ pub struct Interpreter {}
 // I am currently here
 // https://craftinginterpreters.com/statements-and-state.html
 impl Interpreter {
-  pub fn interpret(expr: &Expr) -> String {
-    match Self::evaluate(&expr) {
-      Ok(output) => output.to_string(),
+  pub fn interpret(stmt: &Stmt) -> String {
+    match Self::evaluate_stmt(&stmt) {
+      // Ok(output) => output.to_string(),
+      Ok(_) => String::from(""),
       Err(err) => err.message,
     }
   }
 
-  fn evaluate(expr: &Expr) -> Result<LiteralValue, EvalErr> {
+  fn evaluate_stmt(stmt: &Stmt) -> Result<(), EvalErr> {
+    use Stmt::*;
+    match &stmt {
+      Print(str) => {
+        let value = Self::evaluate_expr(expr);
+        println!(format!("{}", value));
+        //
+        Ok(())
+      }
+      Expr(expr) => {
+        //
+        Self::evaluate_expr(expr);
+        Ok(())
+      }
+    }
+  }
+
+  fn evaluate_expr(expr: &Expr) -> Result<LiteralValue, EvalErr> {
     use Expr::*;
     use TokenType::*;
     match expr {
