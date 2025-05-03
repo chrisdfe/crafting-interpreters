@@ -45,24 +45,70 @@ impl Parser {
   }
 
   pub fn parse(tokens: Vec<Token>) -> Vec<Stmt> {
-    Parser::new(tokens).parse_statements()
+    Parser::new(tokens).begin_parse()
   }
 
-  fn parse_statements(&mut self) -> Vec<Stmt> {
+  fn begin_parse(&mut self) -> Vec<Stmt> {
     let mut stmts = Vec::new();
 
     while !self.is_at_end() {
-      match self.parse_statement() {
+      match self.parse_declaration() {
         Err(err) => {
           println!("{}", err.full_text())
         }
-        Ok(stmt) => {
-          stmts.push(stmt);
-        }
+        Ok(stmt) => match stmt {
+          Some(stmt) => {
+            stmts.push(stmt);
+          }
+          None => (),
+        },
       }
     }
 
     stmts
+  }
+
+  fn parse_declaration(&mut self) -> Result<Option<Stmt>, ParseErr> {
+    let result = if let Some(_) = self.match_and_consume(TokenType::Var) {
+      self.parse_var_declaration()
+    } else {
+      self.parse_statement()
+    };
+
+    match result {
+      Ok(stmt) => Ok(Some(stmt)),
+      Err(err) => {
+        // TODO - should I not do this?
+        println!("{}", err.full_text());
+        self.synchronize();
+        Ok(None)
+      }
+    }
+  }
+
+  fn parse_var_declaration(&mut self) -> ParseStmtResult {
+    let name = if let Some(name) = self.match_and_consume(TokenType::Identifier) {
+      name
+    } else {
+      return self.create_parse_stmt_err(String::from("Expected variable name."));
+    };
+
+    let initializer = if self.match_and_consume(TokenType::Equal).is_some() {
+      let expr = match self.parse_expression() {
+        Err(err) => return Err(err),
+        Ok(expr) => expr,
+      };
+
+      Some(*expr)
+    } else {
+      None
+    };
+
+    if self.match_and_consume(TokenType::Semicolon).is_none() {
+      return self.create_parse_stmt_err(String::from("Expected ';' after variable declaration"));
+    }
+
+    Ok(Stmt::Var(name, initializer))
   }
 
   fn parse_statement(&mut self) -> ParseStmtResult {
@@ -209,6 +255,7 @@ impl Parser {
       True => Some(Expr::Literal(LiteralValue::True)),
       Nil => Some(Expr::Literal(LiteralValue::Nil)),
       Num | Str => Some(Expr::Literal(current_token.literal)),
+      Identifier => Some(Expr::Variable(self.prev_token())),
       LeftParen => {
         self.consume();
 
@@ -289,6 +336,11 @@ impl Parser {
     self.tokens.get(self.current).unwrap().clone()
   }
 
+  fn prev_token(&self) -> Token {
+    // Note - will panic if self.current == 0
+    self.tokens.get(self.current - 1).unwrap().clone()
+  }
+
   fn create_parse_stmt_err(&self, message: String) -> Result<Stmt, ParseErr> {
     Err(ParseErr::create(
       &self.current_token(),
@@ -301,5 +353,23 @@ impl Parser {
       &self.current_token(),
       String::from(message),
     ))
+  }
+
+  fn synchronize(&mut self) {
+    self.consume();
+
+    use TokenType::*;
+    while !self.is_at_end() {
+      if self.prev_token().token_type == TokenType::Semicolon {
+        return;
+      }
+
+      match self.peek().token_type {
+        Class | Fun | Var | For | If | While | Print | Return => (),
+        _ => {
+          self.consume();
+        }
+      };
+    }
   }
 }

@@ -16,8 +16,6 @@ fn eval_err(message: String) -> Result<LiteralValue, EvalErr> {
 
 pub struct Interpreter {}
 
-// I am currently here
-// https://craftinginterpreters.com/statements-and-state.html
 impl Interpreter {
   // TODO - return type shouldn't be string I think
   pub fn interpret(stmts: Vec<Stmt>) -> String {

@@ -32,10 +32,10 @@ pub enum TokenType {
 
   // Keywords.
   And,
-  // Class,
+  Class,
   Else,
   False,
-  // Fun,
+  Fun,
   For,
   If,
   Nil,

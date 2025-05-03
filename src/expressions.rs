@@ -11,6 +11,8 @@ pub enum Expr {
   Binary(Box<Expr>, Token, Box<Expr>),
   // expr
   Grouping(Box<Expr>),
+  // name
+  Variable(Token),
 }
 
 impl Expr {
@@ -28,6 +30,7 @@ impl Expr {
         right.to_string()
       )),
       Grouping(expr) => String::from(format!("(group {})", expr.to_string())),
+      Variable(token) => String::from(format!("var {:?}", token.lexeme)),
     }
   }
 }
