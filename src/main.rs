@@ -1,5 +1,6 @@
 use std::{fs, io::Write, process::ExitCode};
 
+mod environments;
 mod expressions;
 mod interpreter;
 mod literals;
@@ -38,6 +39,8 @@ fn main() -> ExitCode {
   };
   */
 
+  let mut interpreter = Interpreter::new();
+
   loop {
     print!(">");
     let mut input = String::new();
@@ -47,9 +50,15 @@ fn main() -> ExitCode {
       .read_line(&mut input)
       .expect(&format!("Unable to read line '{}'", &input).to_owned());
 
-    if input.len() > 0 {
-      let result = interpret_input(input);
-      println!("{}", result)
+    // println!("{}", result);
+    let tokens = Scanner::scan(input);
+
+    let statements = Parser::parse(tokens);
+    match interpreter.interpret(statements) {
+      Err(err) => {
+        println!("{}", err.message);
+      }
+      _ => (),
     }
   }
 
@@ -98,28 +107,7 @@ fn read_file(file_name: &String) -> Result<(), String> {
 
   Interpreter::interpret(&ast); */
 
-  loop {
-    print!(">");
-    let mut input = String::new();
-    let _ = std::io::stdout().flush();
-
-    std::io::stdin()
-      .read_line(&mut input)
-      .expect(&format!("Unable to read line '{}'", &input).to_owned());
-
-    let result = interpret_input(input);
-    println!("{}", result)
-  }
+  let mut interpreter = Interpreter::new();
 
   Ok(())
-}
-
-fn interpret_input(input: String) -> String {
-  let tokens = Scanner::scan(input);
-
-  let statements = Parser::parse(tokens);
-
-  Interpreter::interpret(statements);
-
-  String::from("")
 }

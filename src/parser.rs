@@ -248,17 +248,19 @@ impl Parser {
   fn parse_primary(&mut self) -> ParseExprResult {
     use TokenType::*;
 
-    let current_token = self.current_token();
+    let token = match self.consume() {
+      Some(token) => token,
+      // TODO - not sure what the best way to handle this is
+      None => return self.create_parse_expr_err(String::from("Expected expression")),
+    };
 
-    let expr = match &current_token.token_type {
+    let expr = match &token.token_type {
       False => Some(Expr::Literal(LiteralValue::False)),
       True => Some(Expr::Literal(LiteralValue::True)),
       Nil => Some(Expr::Literal(LiteralValue::Nil)),
-      Num | Str => Some(Expr::Literal(current_token.literal)),
+      Num | Str => Some(Expr::Literal(token.literal)),
       Identifier => Some(Expr::Variable(self.prev_token())),
       LeftParen => {
-        self.consume();
-
         let expr = match self.parse_expression() {
           Err(err) => return Err(err),
           Ok(expr) => expr,
@@ -275,9 +277,6 @@ impl Parser {
       }
       _ => None,
     };
-
-    // TODO - why do I need this final consume?
-    self.consume();
 
     if let Some(expr) = expr {
       Ok(Box::new(expr))

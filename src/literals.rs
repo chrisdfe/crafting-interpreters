@@ -75,6 +75,14 @@ impl LiteralValue {
     !self.is_truthy()
   }
 
+  pub fn is_string(&self) -> bool {
+    if let LiteralValue::Str(_) = &self {
+      true
+    } else {
+      false
+    }
+  }
+
   pub fn equals(&self, other: &LiteralValue) -> bool {
     use LiteralValue::*;
     match &self {
