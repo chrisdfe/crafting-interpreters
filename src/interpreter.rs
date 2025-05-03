@@ -16,8 +16,8 @@ fn eval_err(message: String) -> Result<LiteralValue, EvalErr> {
 
 pub struct Interpreter {}
 
-// I left off here:
-// https://craftinginterpreters.com/evaluating-expressions.html#evaluating-binary-operators
+// I am currently here
+// https://craftinginterpreters.com/statements-and-state.html
 impl Interpreter {
   pub fn interpret(expr: &Expr) -> String {
     match Self::evaluate(&expr) {
