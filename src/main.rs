@@ -1,3 +1,10 @@
+#![allow(
+  //
+  dead_code,
+  unused_variables,
+  clippy::borrowed_box
+)]
+
 use std::{fs, io::Write, process::ExitCode};
 
 mod environments;
@@ -14,7 +21,7 @@ use parser::Parser;
 use scanner::Scanner;
 
 fn main() -> ExitCode {
-  let args: Vec<String> = std::env::args().collect();
+  let _args: Vec<String> = std::env::args().collect();
 
   /*
   // TODO - handle both cargo run & regular script running
@@ -48,21 +55,19 @@ fn main() -> ExitCode {
 
     std::io::stdin()
       .read_line(&mut input)
-      .expect(&format!("Unable to read line '{}'", &input).to_owned());
+      .unwrap_or_else(|_| panic!("{}", format!("Unable to read line '{}'", &input).to_owned()));
 
     // println!("{}", result);
     let tokens = Scanner::scan(input);
 
     let statements = Parser::parse(tokens);
-    match interpreter.interpret(statements) {
-      Err(err) => {
-        println!("{}", err.message);
-      }
-      _ => (),
+    let result = interpreter.interpret(statements);
+    if let Err(err) = result {
+      println!("{}", err.message);
     }
   }
 
-  ExitCode::SUCCESS
+  // ExitCode::SUCCESS
 }
 
 fn read_file(file_name: &String) -> Result<(), String> {
@@ -107,7 +112,7 @@ fn read_file(file_name: &String) -> Result<(), String> {
 
   Interpreter::interpret(&ast); */
 
-  let mut interpreter = Interpreter::new();
+  // let mut interpreter = Interpreter::new();
 
   Ok(())
 }

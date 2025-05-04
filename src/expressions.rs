@@ -16,6 +16,7 @@ pub enum Expr {
 }
 
 impl Expr {
+  /*
   pub fn to_string(&self) -> String {
     use Expr::*;
     match &self {
@@ -33,4 +34,5 @@ impl Expr {
       Variable(token) => String::from(format!("var {:?}", token.lexeme)),
     }
   }
+  */
 }

@@ -50,13 +50,13 @@ impl LiteralValue {
       // True => Ok(1.),
       // False => Ok(0.),
       Num(n) => Ok(*n),
-      _ => Err(format!("Unable to cast '{}' to number", self.to_string())),
+      _ => Err(format!("Unable to cast '{}' to number", self)),
     }
   }
 
-  pub fn to_bool_literal_value(&self) -> LiteralValue {
-    LiteralValue::from(self.is_truthy())
-  }
+  // pub fn to_bool_literal_value(&self) -> LiteralValue {
+  //   LiteralValue::from(self.is_truthy())
+  // }
 
   pub fn to_inverse_bool_literal_value(&self) -> LiteralValue {
     LiteralValue::from(!self.is_truthy())
@@ -64,40 +64,19 @@ impl LiteralValue {
 
   pub fn is_truthy(&self) -> bool {
     use LiteralValue::*;
-    match &self {
-      Nil => false,
-      False => false,
-      _ => true,
-    }
+    !matches!(self, Nil | False)
   }
 
-  pub fn is_falsey(&self) -> bool {
-    !self.is_truthy()
-  }
-
-  pub fn is_string(&self) -> bool {
-    if let LiteralValue::Str(_) = &self {
-      true
-    } else {
-      false
-    }
-  }
+  // pub fn is_string(&self) -> bool {
+  //   matches!(self, LiteralValue::Str(_))
+  // }
 
   pub fn equals(&self, other: &LiteralValue) -> bool {
     use LiteralValue::*;
     match &self {
-      Nil => match &other {
-        Nil => true,
-        _ => false,
-      },
-      True => match &other {
-        True => true,
-        _ => false,
-      },
-      False => match &other {
-        False => true,
-        _ => false,
-      },
+      Nil => matches!(other, Nil),
+      True => matches!(&other, True),
+      False => matches!(&other, False),
       Num(a) => match &other {
         Num(b) => a == b,
         _ => false,

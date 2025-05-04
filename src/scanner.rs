@@ -60,7 +60,7 @@ impl Scanner {
   }
 
   pub fn start(&mut self) {
-    if self.source.len() == 0 {
+    if self.source.is_empty() {
       return;
     }
 
@@ -150,7 +150,7 @@ impl Scanner {
         if is_alpha(c) {
           self.identifier();
         } else {
-          self.add_error(String::from(format!("Unrecognized character: '{c}'")));
+          self.add_error(format!("Unrecognized character: '{c}'"));
         }
       }
     }
@@ -263,7 +263,7 @@ impl Scanner {
   }
 
   fn add_token(&mut self, token_type: TokenType) {
-    let text = String::from(get_char_substr(&self.source, self.start, self.current));
+    let text = get_char_substr(&self.source, self.start, self.current);
     self.tokens.push(Token {
       token_type,
       literal: LiteralValue::Nil,
@@ -274,7 +274,7 @@ impl Scanner {
   }
 
   fn add_literal_token(&mut self, token_type: TokenType, literal: LiteralValue) {
-    let text = String::from(get_char_substr(&self.source, self.start, self.current));
+    let text = get_char_substr(&self.source, self.start, self.current);
     self.tokens.push(Token {
       token_type,
       literal,
@@ -298,19 +298,19 @@ impl Scanner {
 }
 
 fn is_alpha(c: char) -> bool {
-  (c >= 'a' && c <= 'z') || // lowercase
-  (c >= 'A' && c <= 'Z') || // uppercase
+  c.is_ascii_lowercase() || // lowercase
+  c.is_ascii_uppercase() || // uppercase
   c == '_'
 }
 
 fn is_digit(c: char) -> bool {
-  c >= '0' && c <= '9'
+  c.is_ascii_digit()
 }
 
 fn is_alphanumeric(c: char) -> bool {
   is_alpha(c) || is_digit(c)
 }
 
-fn get_char_substr(s: &String, start: usize, end: usize) -> String {
-  s.as_str()[start..=end].to_string()
+fn get_char_substr(s: &str, start: usize, end: usize) -> String {
+  s[start..=end].to_string()
 }

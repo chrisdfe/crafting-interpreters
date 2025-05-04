@@ -38,10 +38,7 @@ fn parse_floats_from_binary_expr(
 }
 
 fn is_string_literal(literal: &LiteralValue) -> bool {
-  match literal {
-    LiteralValue::Str(_) => true,
-    _ => false,
-  }
+  matches!(literal, LiteralValue::Str(_))
 }
 
 pub struct Interpreter {
@@ -70,25 +67,19 @@ impl Interpreter {
     use Stmt::*;
     match &stmt {
       Print(expr) => {
-        let value = match self.evaluate_expr(expr) {
-          Err(err) => return Err(err),
-          Ok(value) => value,
-        };
+        let value = self.evaluate_expr(expr)?;
 
         println!("{}", value.cast_string());
 
         Ok(())
       }
       Expr(expr) => match self.evaluate_expr(expr) {
-        Err(err) => return Err(err),
+        Err(err) => Err(err),
         Ok(_) => Ok(()),
       },
       Var(name, initializer) => {
         let value = match initializer {
-          Some(expr) => match self.evaluate_expr(expr) {
-            Err(err) => return Err(err),
-            Ok(value) => value,
-          },
+          Some(expr) => self.evaluate_expr(expr)?,
           None => LiteralValue::Nil,
         };
 
@@ -116,20 +107,15 @@ impl Interpreter {
     operator: &Token,
     right: &Box<Expr>,
   ) -> Result<LiteralValue, RuntimeErr> {
-    let right = match self.evaluate_expr(right) {
-      Err(err) => return Err(err),
-      Ok(right) => right,
-    };
+    let right = self.evaluate_expr(right)?;
 
     use TokenType::*;
     match &operator.token_type {
       Minus => match right.cast_float() {
-        Err(_) => {
-          return runtime_err(format!(
-            "Cannot apply unary operator '-' to token {}",
-            right
-          ))
-        }
+        Err(_) => runtime_err(format!(
+          "Cannot apply unary operator '-' to token {}",
+          right
+        )),
         Ok(v) => Ok(LiteralValue::Num(-v)),
       },
       Bang => Ok(right.to_inverse_bool_literal_value()),
@@ -143,15 +129,8 @@ impl Interpreter {
     operator: &Token,
     right: &Box<Expr>,
   ) -> Result<LiteralValue, RuntimeErr> {
-    let left = match self.evaluate_expr(&left) {
-      Err(err) => return Err(err),
-      Ok(left) => left,
-    };
-
-    let right = match self.evaluate_expr(&right) {
-      Err(err) => return Err(err),
-      Ok(right) => right,
-    };
+    let left = self.evaluate_expr(left)?;
+    let right = self.evaluate_expr(right)?;
 
     use TokenType::*;
     match &operator.token_type {
@@ -165,7 +144,7 @@ impl Interpreter {
           Minus => Ok(LiteralValue::Num(left - right)),
           Star => Ok(LiteralValue::Num(left * right)),
           Slash => Ok(LiteralValue::Num(left / right)),
-          t => return runtime_err(format!("unexpected token type: {:?}", t)),
+          t => runtime_err(format!("unexpected token type: {:?}", t)),
         }
       }
       Plus => {
@@ -216,12 +195,10 @@ impl Interpreter {
         let value = left.equals(&right);
         Ok(LiteralValue::from(!value))
       }
-      t => {
-        return runtime_err(format!(
-          "Unexpected operator in binary expression: '{:?}'",
-          t
-        ))
-      }
+      t => runtime_err(format!(
+        "Unexpected operator in binary expression: '{:?}'",
+        t
+      )),
     }
   }
 }

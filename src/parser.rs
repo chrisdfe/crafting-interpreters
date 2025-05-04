@@ -56,12 +56,11 @@ impl Parser {
         Err(err) => {
           println!("{}", err.full_text())
         }
-        Ok(stmt) => match stmt {
-          Some(stmt) => {
+        Ok(stmt) => {
+          if let Some(stmt) = stmt {
             stmts.push(stmt);
           }
-          None => (),
-        },
+        }
       }
     }
 
@@ -69,7 +68,7 @@ impl Parser {
   }
 
   fn parse_declaration(&mut self) -> Result<Option<Stmt>, ParseErr> {
-    let result = if let Some(_) = self.match_and_consume(TokenType::Var) {
+    let result = if self.match_and_consume(TokenType::Var).is_some() {
       self.parse_var_declaration()
     } else {
       self.parse_statement()
@@ -94,10 +93,7 @@ impl Parser {
     };
 
     let initializer = if self.match_and_consume(TokenType::Equal).is_some() {
-      let expr = match self.parse_expression() {
-        Err(err) => return Err(err),
-        Ok(expr) => expr,
-      };
+      let expr = self.parse_expression()?;
 
       Some(*expr)
     } else {
@@ -112,7 +108,7 @@ impl Parser {
   }
 
   fn parse_statement(&mut self) -> ParseStmtResult {
-    if let Some(_) = self.match_and_consume(TokenType::Print) {
+    if self.match_and_consume(TokenType::Print).is_some() {
       self.parse_print_statement()
     } else {
       //
@@ -124,10 +120,7 @@ impl Parser {
   }
 
   fn parse_print_statement(&mut self) -> ParseStmtResult {
-    let value = match self.parse_expression() {
-      Err(err) => return Err(err),
-      Ok(value) => value,
-    };
+    let value = self.parse_expression()?;
 
     if self.match_and_consume(TokenType::Semicolon).is_none() {
       return self.create_parse_stmt_err(String::from("Expect ';' after value."));
@@ -137,10 +130,7 @@ impl Parser {
   }
 
   fn parse_expression_statement(&mut self) -> ParseStmtResult {
-    let expr = match self.parse_expression() {
-      Err(err) => return Err(err),
-      Ok(expr) => expr,
-    };
+    let expr = self.parse_expression()?;
 
     if self.match_and_consume(TokenType::Semicolon).is_none() {
       return self.create_parse_stmt_err(String::from("Expect ';' after value."));
@@ -154,17 +144,11 @@ impl Parser {
   }
 
   fn parse_equality(&mut self) -> ParseExprResult {
-    let mut expr = match self.parse_comparison() {
-      Err(err) => return Err(err),
-      Ok(expr) => expr,
-    };
+    let mut expr = self.parse_comparison()?;
 
     use TokenType::*;
     while let Some(operator) = self.match_one_of_and_consume(vec![BangEqual, EqualEqual]) {
-      let right = match self.parse_comparison() {
-        Err(err) => return Err(err),
-        Ok(expr) => expr,
-      };
+      let right = self.parse_comparison()?;
 
       expr = Box::new(Expr::Binary(expr, operator.clone(), right));
     }
@@ -173,19 +157,13 @@ impl Parser {
   }
 
   fn parse_comparison(&mut self) -> ParseExprResult {
-    let mut expr = match self.parse_term() {
-      Err(err) => return Err(err),
-      Ok(expr) => expr,
-    };
+    let mut expr = self.parse_term()?;
 
     use TokenType::*;
     while let Some(operator) =
       self.match_one_of_and_consume(vec![Greater, GreaterEqual, Less, LessEqual])
     {
-      let right = match self.parse_term() {
-        Err(err) => return Err(err),
-        Ok(expr) => expr,
-      };
+      let right = self.parse_term()?;
 
       expr = Box::new(Expr::Binary(expr, operator.clone(), right))
     }
@@ -194,17 +172,11 @@ impl Parser {
   }
 
   fn parse_term(&mut self) -> ParseExprResult {
-    let mut expr = match self.parse_factor() {
-      Err(err) => return Err(err),
-      Ok(expr) => expr,
-    };
+    let mut expr = self.parse_factor()?;
 
     use TokenType::*;
     while let Some(operator) = self.match_one_of_and_consume(vec![Minus, Plus]) {
-      let right = match self.parse_factor() {
-        Err(err) => return Err(err),
-        Ok(expr) => expr,
-      };
+      let right = self.parse_factor()?;
 
       expr = Box::new(Expr::Binary(expr, operator.clone(), right));
     }
@@ -213,17 +185,11 @@ impl Parser {
   }
 
   fn parse_factor(&mut self) -> ParseExprResult {
-    let mut expr = match self.parse_unary() {
-      Err(err) => return Err(err),
-      Ok(expr) => expr,
-    };
+    let mut expr = self.parse_unary()?;
 
     use TokenType::*;
     while let Some(operator) = self.match_one_of_and_consume(vec![Slash, Star]) {
-      let right = match self.parse_unary() {
-        Err(err) => return Err(err),
-        Ok(expr) => expr,
-      };
+      let right = self.parse_unary()?;
 
       expr = Box::new(Expr::Binary(expr, operator, right));
     }
@@ -234,10 +200,7 @@ impl Parser {
   fn parse_unary(&mut self) -> ParseExprResult {
     use TokenType::*;
     if let Some(operator) = self.match_one_of_and_consume(vec![Bang, Minus]) {
-      let right = match self.parse_unary() {
-        Err(err) => return Err(err),
-        Ok(expr) => expr,
-      };
+      let right = self.parse_unary()?;
 
       Ok(Box::new(Expr::Unary(operator, right)))
     } else {
@@ -261,10 +224,7 @@ impl Parser {
       Num | Str => Some(Expr::Literal(token.literal)),
       Identifier => Some(Expr::Variable(self.prev_token())),
       LeftParen => {
-        let expr = match self.parse_expression() {
-          Err(err) => return Err(err),
-          Ok(expr) => expr,
-        };
+        let expr = self.parse_expression()?;
 
         if self.match_and_consume(RightParen).is_none() {
           return Err(ParseErr::create(
@@ -310,8 +270,7 @@ impl Parser {
     let token = self.current_token();
     let matches = token_types
       .into_iter()
-      .find(|token_type| token.token_type == *token_type)
-      .is_some();
+      .any(|token_type| token.token_type == token_type);
 
     if matches {
       self.consume();
@@ -341,17 +300,11 @@ impl Parser {
   }
 
   fn create_parse_stmt_err(&self, message: String) -> Result<Stmt, ParseErr> {
-    Err(ParseErr::create(
-      &self.current_token(),
-      String::from(message),
-    ))
+    Err(ParseErr::create(&self.current_token(), message))
   }
 
   fn create_parse_expr_err(&self, message: String) -> Result<Box<Expr>, ParseErr> {
-    Err(ParseErr::create(
-      &self.current_token(),
-      String::from(message),
-    ))
+    Err(ParseErr::create(&self.current_token(), message))
   }
 
   fn synchronize(&mut self) {
