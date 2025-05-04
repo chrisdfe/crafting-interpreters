@@ -52,7 +52,7 @@ impl Parser {
     let mut stmts = Vec::new();
 
     while !self.is_at_end() {
-      match self.parse_declaration() {
+      match self.parse_declaration_statement() {
         Err(err) => {
           println!("{}", err.full_text())
         }
@@ -67,9 +67,9 @@ impl Parser {
     stmts
   }
 
-  fn parse_declaration(&mut self) -> Result<Option<Stmt>, ParseErr> {
+  fn parse_declaration_statement(&mut self) -> Result<Option<Stmt>, ParseErr> {
     let result = if self.match_and_consume(TokenType::Var).is_some() {
-      self.parse_var_declaration()
+      self.parse_var_declaration_statement()
     } else {
       self.parse_statement()
     };
@@ -77,7 +77,7 @@ impl Parser {
     match result {
       Ok(stmt) => Ok(Some(stmt)),
       Err(err) => {
-        // TODO - should I not do this?
+        // TODO - should I not print this here?
         println!("{}", err.full_text());
         self.synchronize();
         Ok(None)
@@ -85,7 +85,7 @@ impl Parser {
     }
   }
 
-  fn parse_var_declaration(&mut self) -> ParseStmtResult {
+  fn parse_var_declaration_statement(&mut self) -> ParseStmtResult {
     let name = if let Some(name) = self.match_and_consume(TokenType::Identifier) {
       name
     } else {
@@ -140,15 +140,33 @@ impl Parser {
   }
 
   fn parse_expression(&mut self) -> ParseExprResult {
-    self.parse_equality()
+    self.parse_assignment_expression()
   }
 
-  fn parse_equality(&mut self) -> ParseExprResult {
-    let mut expr = self.parse_comparison()?;
+  fn parse_assignment_expression(&mut self) -> ParseExprResult {
+    let expr = self.parse_equality_expression()?;
+
+    if self.match_and_consume(TokenType::Equal).is_some() {
+      let equals = self.prev_token();
+
+      let value = self.parse_assignment_expression()?;
+
+      if let Expr::Variable(name) = expr.as_ref() {
+        Ok(Box::new(Expr::Assign(name.clone(), value)))
+      } else {
+        self.create_parse_expr_err(&equals, String::from("Invalid asignment target."))
+      }
+    } else {
+      Ok(expr)
+    }
+  }
+
+  fn parse_equality_expression(&mut self) -> ParseExprResult {
+    let mut expr = self.parse_comparison_expression()?;
 
     use TokenType::*;
     while let Some(operator) = self.match_one_of_and_consume(vec![BangEqual, EqualEqual]) {
-      let right = self.parse_comparison()?;
+      let right = self.parse_comparison_expression()?;
 
       expr = Box::new(Expr::Binary(expr, operator.clone(), right));
     }
@@ -156,14 +174,14 @@ impl Parser {
     Ok(expr)
   }
 
-  fn parse_comparison(&mut self) -> ParseExprResult {
-    let mut expr = self.parse_term()?;
+  fn parse_comparison_expression(&mut self) -> ParseExprResult {
+    let mut expr = self.parse_term_expression()?;
 
     use TokenType::*;
     while let Some(operator) =
       self.match_one_of_and_consume(vec![Greater, GreaterEqual, Less, LessEqual])
     {
-      let right = self.parse_term()?;
+      let right = self.parse_term_expression()?;
 
       expr = Box::new(Expr::Binary(expr, operator.clone(), right))
     }
@@ -171,12 +189,12 @@ impl Parser {
     Ok(expr)
   }
 
-  fn parse_term(&mut self) -> ParseExprResult {
-    let mut expr = self.parse_factor()?;
+  fn parse_term_expression(&mut self) -> ParseExprResult {
+    let mut expr = self.parse_factor_expression()?;
 
     use TokenType::*;
     while let Some(operator) = self.match_one_of_and_consume(vec![Minus, Plus]) {
-      let right = self.parse_factor()?;
+      let right = self.parse_factor_expression()?;
 
       expr = Box::new(Expr::Binary(expr, operator.clone(), right));
     }
@@ -184,12 +202,12 @@ impl Parser {
     Ok(expr)
   }
 
-  fn parse_factor(&mut self) -> ParseExprResult {
-    let mut expr = self.parse_unary()?;
+  fn parse_factor_expression(&mut self) -> ParseExprResult {
+    let mut expr = self.parse_unary_expression()?;
 
     use TokenType::*;
     while let Some(operator) = self.match_one_of_and_consume(vec![Slash, Star]) {
-      let right = self.parse_unary()?;
+      let right = self.parse_unary_expression()?;
 
       expr = Box::new(Expr::Binary(expr, operator, right));
     }
@@ -197,24 +215,27 @@ impl Parser {
     Ok(expr)
   }
 
-  fn parse_unary(&mut self) -> ParseExprResult {
+  fn parse_unary_expression(&mut self) -> ParseExprResult {
     use TokenType::*;
     if let Some(operator) = self.match_one_of_and_consume(vec![Bang, Minus]) {
-      let right = self.parse_unary()?;
+      let right = self.parse_unary_expression()?;
 
       Ok(Box::new(Expr::Unary(operator, right)))
     } else {
-      self.parse_primary()
+      self.parse_primary_expression()
     }
   }
 
-  fn parse_primary(&mut self) -> ParseExprResult {
+  fn parse_primary_expression(&mut self) -> ParseExprResult {
     use TokenType::*;
 
     let token = match self.consume() {
       Some(token) => token,
       // TODO - not sure what the best way to handle this is
-      None => return self.create_parse_expr_err(String::from("Expected expression")),
+      None => {
+        return self
+          .create_parse_expr_err(&self.current_token(), String::from("Expected expression"))
+      }
     };
 
     let expr = match &token.token_type {
@@ -241,7 +262,7 @@ impl Parser {
     if let Some(expr) = expr {
       Ok(Box::new(expr))
     } else {
-      self.create_parse_expr_err(String::from("Expected expression."))
+      self.create_parse_expr_err(&self.current_token(), String::from("Expected expression."))
     }
   }
 
@@ -303,8 +324,8 @@ impl Parser {
     Err(ParseErr::create(&self.current_token(), message))
   }
 
-  fn create_parse_expr_err(&self, message: String) -> Result<Box<Expr>, ParseErr> {
-    Err(ParseErr::create(&self.current_token(), message))
+  fn create_parse_expr_err(&self, token: &Token, message: String) -> Result<Box<Expr>, ParseErr> {
+    Err(ParseErr::create(token, message))
   }
 
   fn synchronize(&mut self) {

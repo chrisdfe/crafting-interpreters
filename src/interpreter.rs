@@ -95,6 +95,10 @@ impl Interpreter {
     use Expr::*;
     match &expr {
       Literal(value) => Ok(value.clone()),
+      Assign(name, expr) => {
+        let value = self.evaluate_expr(expr)?;
+        self.environment.assign(name, value)
+      }
       Grouping(expr) => self.evaluate_expr(expr),
       Unary(operator, right) => self.evaluate_unary_expr(operator, right),
       Binary(left, operator, right) => self.evaluate_binary_expr(left, operator, right),

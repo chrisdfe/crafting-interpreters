@@ -60,7 +60,12 @@ fn main() -> ExitCode {
     // println!("{}", result);
     let tokens = Scanner::scan(input);
 
+    for token in tokens.iter() {
+      println!("{:?}", &token);
+    }
+
     let statements = Parser::parse(tokens);
+
     let result = interpreter.interpret(statements);
     if let Err(err) = result {
       println!("{}", err.message);

@@ -21,6 +21,15 @@ impl Environment {
     self.values.insert(name, value);
   }
 
+  pub fn assign(&mut self, name: &Token, value: LiteralValue) -> Result<LiteralValue, RuntimeErr> {
+    if self.values.contains_key(&name.lexeme) {
+      self.values.insert(name.lexeme.clone(), value.clone());
+      Ok(value)
+    } else {
+      runtime_err(format!("Undefined variable: {}", name.lexeme))
+    }
+  }
+
   pub fn get(&self, name: &Token) -> Result<LiteralValue, RuntimeErr> {
     match self.values.get(&name.lexeme) {
       Some(value) => Ok(value.clone()),
