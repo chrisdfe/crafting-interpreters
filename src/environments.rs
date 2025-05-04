@@ -7,12 +7,14 @@ use crate::{
 };
 
 pub struct Environment {
+  enclosing: Option<Box<Environment>>,
   values: HashMap<String, LiteralValue>,
 }
 
 impl Environment {
-  pub fn new() -> Self {
+  pub fn new(enclosing: Option<Box<Environment>>) -> Self {
     Self {
+      enclosing,
       values: HashMap::new(),
     }
   }
@@ -25,15 +27,20 @@ impl Environment {
     if self.values.contains_key(&name.lexeme) {
       self.values.insert(name.lexeme.clone(), value.clone());
       Ok(value)
+    } else if let Some(enclosing) = &mut self.enclosing {
+      enclosing.assign(name, value)
     } else {
       runtime_err(format!("Undefined variable: {}", name.lexeme))
     }
   }
 
   pub fn get(&self, name: &Token) -> Result<LiteralValue, RuntimeErr> {
-    match self.values.get(&name.lexeme) {
-      Some(value) => Ok(value.clone()),
-      None => runtime_err(format!("Undefined variable: {}", name.lexeme)),
+    if let Some(value) = self.values.get(&name.lexeme) {
+      Ok(value.clone())
+    } else if let Some(enclosing) = &self.enclosing {
+      enclosing.get(name)
+    } else {
+      runtime_err(format!("Undefined variable: {}", name.lexeme))
     }
   }
 }

@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::{
   environments::Environment,
   expressions::Expr,
@@ -48,13 +50,13 @@ pub struct Interpreter {
 impl Interpreter {
   pub fn new() -> Self {
     Self {
-      environment: Environment::new(),
+      environment: Environment::new(None),
     }
   }
 
   pub fn interpret(&mut self, stmts: Vec<Stmt>) -> Result<(), RuntimeErr> {
     for stmt in stmts {
-      match self.execute_stmt(&stmt) {
+      match self.execute_stmt(stmt) {
         Ok(_) => (),
         Err(err) => return Err(err),
       };
@@ -63,23 +65,31 @@ impl Interpreter {
     Ok(())
   }
 
-  fn execute_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeErr> {
+  fn execute_stmt(&mut self, stmt: Stmt) -> Result<(), RuntimeErr> {
     use Stmt::*;
-    match &stmt {
+    match stmt {
+      Block(statements) => {
+        //
+        self.execute_block(
+          statements,
+          // Environment::new(Some(Box::new(self.environment))),
+        );
+        Ok(())
+      }
       Print(expr) => {
-        let value = self.evaluate_expr(expr)?;
+        let value = self.evaluate_expr(&expr)?;
 
         println!("{}", value.cast_string());
 
         Ok(())
       }
-      Expr(expr) => match self.evaluate_expr(expr) {
+      Expr(expr) => match self.evaluate_expr(&expr) {
         Err(err) => Err(err),
         Ok(_) => Ok(()),
       },
       Var(name, initializer) => {
         let value = match initializer {
-          Some(expr) => self.evaluate_expr(expr)?,
+          Some(expr) => self.evaluate_expr(&expr)?,
           None => LiteralValue::Nil,
         };
 
@@ -89,6 +99,21 @@ impl Interpreter {
         Ok(())
       }
     }
+  }
+
+  fn execute_block(&mut self, statements: Vec<Stmt> /* , environment: environment */) {
+    //
+    let previous = std::mem::replace(
+      &mut self.environment,
+      Environment::new(Some(Box::new(self.environment))),
+    );
+
+    //
+    for statement in statements {
+      self.execute_stmt(statement);
+    }
+
+    self.environment = previous;
   }
 
   fn evaluate_expr(&mut self, expr: &Expr) -> Result<LiteralValue, RuntimeErr> {

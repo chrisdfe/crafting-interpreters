@@ -36,9 +36,7 @@ pub struct Parser {
   current: usize,
 }
 
-// TODO - "synchronize" method
-// https://craftinginterpreters.com/parsing-expressions.html#synchronizing-a-recursive-descent-parser
-// it's not clear to me how this is supposed to be used right now - the book says we'll return to this
+use TokenType::*;
 impl Parser {
   pub fn new(tokens: Vec<Token>) -> Self {
     Self { tokens, current: 0 }
@@ -52,7 +50,7 @@ impl Parser {
     let mut stmts = Vec::new();
 
     while !self.is_at_end() {
-      match self.parse_declaration_statement() {
+      match self.parse_declaration() {
         Err(err) => {
           println!("{}", err.full_text())
         }
@@ -67,9 +65,9 @@ impl Parser {
     stmts
   }
 
-  fn parse_declaration_statement(&mut self) -> Result<Option<Stmt>, ParseErr> {
-    let result = if self.match_and_consume(TokenType::Var).is_some() {
-      self.parse_var_declaration_statement()
+  fn parse_declaration(&mut self) -> Result<Option<Stmt>, ParseErr> {
+    let result = if self.match_and_consume(Var).is_some() {
+      self.parse_var_declaration()
     } else {
       self.parse_statement()
     };
@@ -85,14 +83,14 @@ impl Parser {
     }
   }
 
-  fn parse_var_declaration_statement(&mut self) -> ParseStmtResult {
-    let name = if let Some(name) = self.match_and_consume(TokenType::Identifier) {
+  fn parse_var_declaration(&mut self) -> ParseStmtResult {
+    let name = if let Some(name) = self.match_and_consume(Identifier) {
       name
     } else {
       return self.create_parse_stmt_err(String::from("Expected variable name."));
     };
 
-    let initializer = if self.match_and_consume(TokenType::Equal).is_some() {
+    let initializer = if self.match_and_consume(Equal).is_some() {
       let expr = self.parse_expression()?;
 
       Some(*expr)
@@ -100,7 +98,7 @@ impl Parser {
       None
     };
 
-    if self.match_and_consume(TokenType::Semicolon).is_none() {
+    if self.match_and_consume(Semicolon).is_none() {
       return self.create_parse_stmt_err(String::from("Expected ';' after variable declaration"));
     }
 
@@ -108,8 +106,11 @@ impl Parser {
   }
 
   fn parse_statement(&mut self) -> ParseStmtResult {
-    if self.match_and_consume(TokenType::Print).is_some() {
+    if self.match_and_consume(Print).is_some() {
       self.parse_print_statement()
+    } else if self.match_and_consume(LeftBrace).is_some() {
+      let statements = self.parse_statements_in_block()?;
+      Ok(Stmt::Block(statements))
     } else {
       //
       match self.parse_expression_statement() {
@@ -122,17 +123,36 @@ impl Parser {
   fn parse_print_statement(&mut self) -> ParseStmtResult {
     let value = self.parse_expression()?;
 
-    if self.match_and_consume(TokenType::Semicolon).is_none() {
+    if self.match_and_consume(Semicolon).is_none() {
       return self.create_parse_stmt_err(String::from("Expect ';' after value."));
     }
 
     Ok(Stmt::Print(*value))
   }
 
+  fn parse_statements_in_block(&mut self) -> Result<Vec<Stmt>, ParseErr> {
+    let mut statements: Vec<Stmt> = Vec::new();
+
+    while !self.current_token_matches(RightBrace) && !self.is_at_end() {
+      if let Some(statement) = self.parse_declaration()? {
+        statements.push(statement);
+      }
+    }
+
+    if self.match_and_consume(RightBrace).is_none() {
+      Err(ParseErr::create(
+        &self.current_token(),
+        String::from("Expected '}' after block."),
+      ))
+    } else {
+      Ok(statements)
+    }
+  }
+
   fn parse_expression_statement(&mut self) -> ParseStmtResult {
     let expr = self.parse_expression()?;
 
-    if self.match_and_consume(TokenType::Semicolon).is_none() {
+    if self.match_and_consume(Semicolon).is_none() {
       return self.create_parse_stmt_err(String::from("Expect ';' after value."));
     }
 
@@ -146,7 +166,7 @@ impl Parser {
   fn parse_assignment_expression(&mut self) -> ParseExprResult {
     let expr = self.parse_equality_expression()?;
 
-    if self.match_and_consume(TokenType::Equal).is_some() {
+    if self.match_and_consume(Equal).is_some() {
       let equals = self.prev_token();
 
       let value = self.parse_assignment_expression()?;
@@ -302,8 +322,16 @@ impl Parser {
     }
   }
 
+  fn current_token_matches(&self, token_type: TokenType) -> bool {
+    if self.is_at_end() {
+      false
+    } else {
+      self.current_token().token_type == token_type
+    }
+  }
+
   fn is_at_end(&self) -> bool {
-    self.peek().token_type == TokenType::Eof
+    self.peek().token_type == Eof
   }
 
   fn peek(&self) -> Token {
