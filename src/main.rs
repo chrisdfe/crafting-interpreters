@@ -7,6 +7,7 @@
 
 use std::{fs, io::Write, process::ExitCode};
 
+mod cli;
 mod environments;
 mod expressions;
 mod interpreter;
@@ -16,12 +17,13 @@ mod scanner;
 mod statements;
 mod tokens;
 
+use cli::get_args;
 use interpreter::Interpreter;
 use parser::Parser;
 use scanner::Scanner;
 
 fn main() -> ExitCode {
-  let _args: Vec<String> = std::env::args().collect();
+  let args = get_args();
 
   /*
   // TODO - handle both cargo run & regular script running
@@ -46,6 +48,20 @@ fn main() -> ExitCode {
   };
   */
 
+  if let Some(filename) = args.filename {
+    //
+    match read_file(filename) {
+      Ok(()) => (),
+      Err(msg) => println!("{}", msg),
+    };
+  } else {
+    interpret_interactive();
+  }
+
+  ExitCode::SUCCESS
+}
+
+fn interpret_interactive() {
   let mut interpreter = Interpreter::new();
 
   loop {
@@ -57,67 +73,36 @@ fn main() -> ExitCode {
       .read_line(&mut input)
       .unwrap_or_else(|_| panic!("{}", format!("Unable to read line '{}'", &input).to_owned()));
 
-    // println!("{}", result);
-    let tokens = Scanner::scan(input);
-
-    for token in tokens.iter() {
-      println!("{:?}", &token);
-    }
-
-    let statements = Parser::parse(tokens);
-
-    let result = interpreter.interpret(statements);
-    if let Err(err) = result {
-      println!("{}", err.message);
-    }
+    interpret_input(input, &mut interpreter);
   }
-
-  // ExitCode::SUCCESS
 }
 
-fn read_file(file_name: &String) -> Result<(), String> {
-  let source = match fs::read_to_string(file_name) {
+fn read_file(filename: String) -> Result<(), String> {
+  let input = match fs::read_to_string(&filename) {
     Err(_) => return Err(String::from("couldn't read file {file_name}")),
     Ok(contents) => contents,
   };
 
-  println!("scanning.");
-  // let scanner = Scanner::scan(source);
+  if input.is_empty() {
+    return Err(format!("File '{}' is empty.", &filename));
+  }
 
-  // if scanner.errors.len() > 0 {
-  //   println!("scanner errors: ");
-  //   for error in scanner.errors {
-  //     println!(
-  //       "'{}' at line {} column {}",
-  //       error.message, error.line, error.column,
-  //     )
-  //   }
-  //   return Err(String::from("couldn't scan file"));
+  let mut interpreter = Interpreter::new();
+  interpret_input(input, &mut interpreter);
+  Ok(())
+}
+
+fn interpret_input(input: String, interpreter: &mut Interpreter) {
+  let tokens = Scanner::scan(input);
+
+  // for token in tokens.iter() {
+  //   println!("{:?}", &token);
   // }
 
-  /*
-  println!("scanner tokens: ");
-  for token in scanner.tokens.iter() {
-    match token {
-      _ => {
-        println!("{:?}", &token);
-      }
-    }
+  let statements = Parser::parse(tokens);
+
+  let result = interpreter.interpret(statements);
+  if let Err(err) = result {
+    println!("{}", err.message);
   }
-  */
-  /*
-  let mut parser = Parser::new(scanner.tokens);
-
-  println!("\nparsing.");
-
-  let ast = match parser.parse() {
-    Err(err) => return Err(format!("Parsing error: {}", err.full_text())),
-    Ok(ast) => ast,
-  };
-
-  Interpreter::interpret(&ast); */
-
-  // let mut interpreter = Interpreter::new();
-
-  Ok(())
 }

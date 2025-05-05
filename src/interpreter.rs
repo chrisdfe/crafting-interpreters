@@ -1,19 +1,18 @@
-use std::collections::VecDeque;
-
 use crate::{
-  environments::Environment,
+  environments::EnvironmentStack,
   expressions::Expr,
   literals::LiteralValue,
   statements::Stmt,
   tokens::{Token, TokenType},
 };
 
+#[derive(Debug)]
 pub struct RuntimeErr {
   pub message: String,
 }
 
 impl RuntimeErr {
-  fn new(message: String) -> Self {
+  pub fn new(message: String) -> Self {
     Self { message }
   }
 }
@@ -44,13 +43,22 @@ fn is_string_literal(literal: &LiteralValue) -> bool {
 }
 
 pub struct Interpreter {
-  environment: Environment,
+  // Note - this differs from the book's implementation (1) a bit by
+  //        using a stack we push/pop environments on to/off of,
+  //        instead of Environment being a recursive type
+  //        and when we create a new environment having to save the previous environment as a local variable (2)
+  //        partially because the latter is kind of annoying to do in rust and
+  //        partially because it just seems clearer & more like the correct data structure for this.
+  //        I might have to change this when I get into functions
+  //        (1) https://craftinginterpreters.com/statements-and-state.html#nesting-and-shadowing
+  //        (2) https://craftinginterpreters.com/statements-and-state.html#block-syntax-and-semantics
+  environment_stack: EnvironmentStack,
 }
 
 impl Interpreter {
   pub fn new() -> Self {
     Self {
-      environment: Environment::new(None),
+      environment_stack: EnvironmentStack::new(),
     }
   }
 
@@ -70,10 +78,7 @@ impl Interpreter {
     match stmt {
       Block(statements) => {
         //
-        self.execute_block(
-          statements,
-          // Environment::new(Some(Box::new(self.environment))),
-        );
+        self.execute_block(statements)?;
         Ok(())
       }
       Print(expr) => {
@@ -93,7 +98,7 @@ impl Interpreter {
           None => LiteralValue::Nil,
         };
 
-        self.environment.define(name.lexeme.clone(), value);
+        self.environment_stack.define(&name.lexeme, value);
 
         //
         Ok(())
@@ -101,19 +106,17 @@ impl Interpreter {
     }
   }
 
-  fn execute_block(&mut self, statements: Vec<Stmt> /* , environment: environment */) {
+  fn execute_block(&mut self, statements: Vec<Stmt>) -> Result<(), RuntimeErr> {
     //
-    let previous = std::mem::replace(
-      &mut self.environment,
-      Environment::new(Some(Box::new(self.environment))),
-    );
+    self.environment_stack.push();
 
     //
     for statement in statements {
-      self.execute_stmt(statement);
+      self.execute_stmt(statement)?;
     }
 
-    self.environment = previous;
+    let _ = self.environment_stack.pop();
+    Ok(())
   }
 
   fn evaluate_expr(&mut self, expr: &Expr) -> Result<LiteralValue, RuntimeErr> {
@@ -122,12 +125,12 @@ impl Interpreter {
       Literal(value) => Ok(value.clone()),
       Assign(name, expr) => {
         let value = self.evaluate_expr(expr)?;
-        self.environment.assign(name, value)
+        self.environment_stack.assign(name, value).cloned()
       }
       Grouping(expr) => self.evaluate_expr(expr),
       Unary(operator, right) => self.evaluate_unary_expr(operator, right),
       Binary(left, operator, right) => self.evaluate_binary_expr(left, operator, right),
-      Variable(value) => self.environment.get(value),
+      Variable(value) => self.environment_stack.get(value).cloned(),
     }
   }
 
