@@ -106,7 +106,9 @@ impl Parser {
   }
 
   fn parse_statement(&mut self) -> ParseStmtResult {
-    if self.match_and_consume(Print).is_some() {
+    if self.match_and_consume(If).is_some() {
+      self.parse_if_statement()
+    } else if self.match_and_consume(Print).is_some() {
       self.parse_print_statement()
     } else if self.match_and_consume(LeftBrace).is_some() {
       let statements = self.parse_statements_in_block()?;
@@ -118,6 +120,32 @@ impl Parser {
         Err(err) => Err(err),
       }
     }
+  }
+
+  fn parse_if_statement(&mut self) -> ParseStmtResult {
+    if self.match_and_consume(LeftParen).is_none() {
+      return self.create_parse_stmt_err(String::from("Expected '(' after 'if'"));
+    }
+
+    let condition = self.parse_expression()?;
+
+    if self.match_and_consume(RightParen).is_none() {
+      return self.create_parse_stmt_err(String::from("Expected '(' after 'if'"));
+    }
+
+    let then_branch = match self.parse_statement() {
+      Ok(stmt) => Box::new(stmt),
+      Err(err) => return Err(err),
+    };
+
+    let else_branch = if self.match_and_consume(Else).is_some() {
+      let statement = self.parse_statement()?;
+      Some(Box::new(statement))
+    } else {
+      None
+    };
+
+    Ok(Stmt::If(*condition, then_branch, else_branch))
   }
 
   fn parse_print_statement(&mut self) -> ParseStmtResult {
