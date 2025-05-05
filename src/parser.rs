@@ -14,7 +14,7 @@ pub struct ParseErr {
 }
 
 impl ParseErr {
-  pub fn create(token: &Token, message: String) -> Self {
+  pub fn new(token: &Token, message: String) -> Self {
     ParseErr {
       token: token.clone(),
       message,
@@ -110,6 +110,14 @@ impl Parser {
       self.parse_if_statement()
     } else if self.match_and_consume(Print).is_some() {
       self.parse_print_statement()
+    } else if self.match_and_consume(While).is_some() {
+      self.match_and_consume_or_err(LeftParen, String::from("Expected '(' after 'while'"))?;
+      let condition = self.parse_expression()?;
+      self.match_and_consume_or_err(RightParen, String::from("Expected ')' after condition"))?;
+
+      let body = self.parse_statement()?;
+
+      Ok(Stmt::While(condition, Box::new(body)))
     } else if self.match_and_consume(LeftBrace).is_some() {
       let statements = self.parse_statements_in_block()?;
       Ok(Stmt::Block(statements))
@@ -168,7 +176,7 @@ impl Parser {
     }
 
     if self.match_and_consume(RightBrace).is_none() {
-      Err(ParseErr::create(
+      Err(ParseErr::new(
         &self.current_token(),
         String::from("Expected '}' after block."),
       ))
@@ -322,7 +330,7 @@ impl Parser {
         let expr = self.parse_expression()?;
 
         if self.match_and_consume(RightParen).is_none() {
-          return Err(ParseErr::create(
+          return Err(ParseErr::new(
             &self.current_token(),
             String::from("Expected ) after expression"),
           ));
@@ -376,6 +384,20 @@ impl Parser {
     }
   }
 
+  fn match_and_consume_or_err(
+    &mut self,
+    token_type: TokenType,
+    message: String,
+  ) -> Result<Token, ParseErr> {
+    let token = self.current_token();
+    if token.token_type == token_type {
+      self.consume();
+      Ok(token)
+    } else {
+      Err(ParseErr::new(&self.current_token(), message))
+    }
+  }
+
   fn current_token_matches(&self, token_type: TokenType) -> bool {
     if self.is_at_end() {
       false
@@ -403,11 +425,11 @@ impl Parser {
   }
 
   fn create_parse_stmt_err(&self, message: String) -> Result<Stmt, ParseErr> {
-    Err(ParseErr::create(&self.current_token(), message))
+    Err(ParseErr::new(&self.current_token(), message))
   }
 
   fn create_parse_expr_err(&self, token: &Token, message: String) -> Result<Box<Expr>, ParseErr> {
-    Err(ParseErr::create(token, message))
+    Err(ParseErr::new(token, message))
   }
 
   fn synchronize(&mut self) {

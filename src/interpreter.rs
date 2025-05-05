@@ -63,7 +63,7 @@ impl Interpreter {
   }
 
   pub fn interpret(&mut self, stmts: Vec<Stmt>) -> Result<(), RuntimeErr> {
-    for stmt in stmts {
+    for stmt in stmts.iter() {
       match self.execute_stmt(stmt) {
         Ok(_) => (),
         Err(err) => return Err(err),
@@ -73,7 +73,7 @@ impl Interpreter {
     Ok(())
   }
 
-  fn execute_stmt(&mut self, stmt: Stmt) -> Result<(), RuntimeErr> {
+  fn execute_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeErr> {
     use Stmt::*;
     match stmt {
       Block(statements) => {
@@ -81,30 +81,34 @@ impl Interpreter {
         self.execute_block(statements)?;
         Ok(())
       }
-      Expr(expr) => match self.evaluate_expr(&expr) {
+
+      Expr(expr) => match self.evaluate_expr(expr) {
         Err(err) => Err(err),
         Ok(_) => Ok(()),
       },
+
       If(cond, then_branch, else_branch) => {
-        let value = self.evaluate_expr(&cond)?;
+        let value = self.evaluate_expr(cond)?;
         if value.is_truthy() {
-          self.execute_stmt(*then_branch)?;
+          self.execute_stmt(then_branch)?;
         } else if let Some(else_branch) = else_branch {
-          self.execute_stmt(*else_branch)?;
+          self.execute_stmt(else_branch)?;
         };
 
         Ok(())
       }
+
       Print(expr) => {
-        let value = self.evaluate_expr(&expr)?;
+        let value = self.evaluate_expr(expr)?;
 
         println!("{}", value.cast_string());
 
         Ok(())
       }
+
       Var(name, initializer) => {
         let value = match initializer {
-          Some(expr) => self.evaluate_expr(&expr)?,
+          Some(expr) => self.evaluate_expr(expr)?,
           None => LiteralValue::Nil,
         };
 
@@ -113,10 +117,18 @@ impl Interpreter {
         //
         Ok(())
       }
+
+      While(condition, body) => {
+        while (self.evaluate_expr(condition))?.is_truthy() {
+          self.execute_stmt(body)?;
+        }
+
+        Ok(())
+      }
     }
   }
 
-  fn execute_block(&mut self, statements: Vec<Stmt>) -> Result<(), RuntimeErr> {
+  fn execute_block(&mut self, statements: &Vec<Stmt>) -> Result<(), RuntimeErr> {
     //
     self.environment_stack.push();
 
