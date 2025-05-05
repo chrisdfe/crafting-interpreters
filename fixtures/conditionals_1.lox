@@ -1,0 +1,7 @@
+var a = 5;
+print "a: " + a;
+if (a > 3) {
+  print "a is greater than 3.";
+} else {
+  print "a is not greater than 3.";
+}

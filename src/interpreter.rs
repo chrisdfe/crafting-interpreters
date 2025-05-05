@@ -81,6 +81,20 @@ impl Interpreter {
         self.execute_block(statements)?;
         Ok(())
       }
+      Expr(expr) => match self.evaluate_expr(&expr) {
+        Err(err) => Err(err),
+        Ok(_) => Ok(()),
+      },
+      If(cond, then_branch, else_branch) => {
+        let value = self.evaluate_expr(&cond)?;
+        if value.is_truthy() {
+          self.execute_stmt(*then_branch)?;
+        } else if let Some(else_branch) = else_branch {
+          self.execute_stmt(*else_branch)?;
+        };
+
+        Ok(())
+      }
       Print(expr) => {
         let value = self.evaluate_expr(&expr)?;
 
@@ -88,10 +102,6 @@ impl Interpreter {
 
         Ok(())
       }
-      Expr(expr) => match self.evaluate_expr(&expr) {
-        Err(err) => Err(err),
-        Ok(_) => Ok(()),
-      },
       Var(name, initializer) => {
         let value = match initializer {
           Some(expr) => self.evaluate_expr(&expr)?,
