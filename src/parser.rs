@@ -357,7 +357,41 @@ impl Parser {
   }
 
   fn parse_call_expression(&mut self) -> ParseExprResult {
-    todo!()
+    let mut expr = self.parse_primary_expression()?;
+
+    loop {
+      if self.match_and_consume(LeftParen).is_some() {
+        expr = Box::new(self.finish_call(*expr)?);
+      } else {
+        break;
+      }
+    }
+
+    Ok(expr)
+  }
+
+  fn finish_call(&mut self, callee: Expr) -> Result<Expr, ParseErr> {
+    let mut arguments = Vec::new();
+    if self.current_token().token_type != RightParen {
+      'parse_args: loop {
+        arguments.push(*self.parse_expression()?);
+        if self.match_and_consume(Comma).is_none() {
+          break 'parse_args;
+        }
+      }
+    }
+
+    if arguments.len() > 255 {
+      return Err(ParseErr::new(
+        &self.current_token(),
+        String::from("Can't have more than 255 arguments"),
+      ));
+    }
+
+    let paren =
+      self.match_and_consume_or_err(RightParen, String::from("Expected ')' after arguments"))?;
+
+    Ok(Expr::Call(Box::new(callee), paren, arguments))
   }
 
   fn parse_primary_expression(&mut self) -> ParseExprResult {
