@@ -106,28 +106,66 @@ impl Parser {
   }
 
   fn parse_statement(&mut self) -> ParseStmtResult {
-    if self.match_and_consume(If).is_some() {
-      self.parse_if_statement()
-    } else if self.match_and_consume(Print).is_some() {
-      self.parse_print_statement()
-    } else if self.match_and_consume(While).is_some() {
-      self.match_and_consume_or_err(LeftParen, String::from("Expected '(' after 'while'"))?;
-      let condition = self.parse_expression()?;
-      self.match_and_consume_or_err(RightParen, String::from("Expected ')' after condition"))?;
+    let token = self.consume()?;
 
-      let body = self.parse_statement()?;
-
-      Ok(Stmt::While(condition, Box::new(body)))
-    } else if self.match_and_consume(LeftBrace).is_some() {
-      let statements = self.parse_statements_in_block()?;
-      Ok(Stmt::Block(statements))
-    } else {
-      //
-      match self.parse_expression_statement() {
-        Ok(stmt) => Ok(stmt),
-        Err(err) => Err(err),
+    match token.token_type {
+      For => self.parse_for_statement(),
+      If => self.parse_if_statement(),
+      Print => self.parse_print_statement(),
+      While => self.parse_while_statement(),
+      LeftBrace => {
+        let statements = self.parse_statements_in_block()?;
+        Ok(Stmt::Block(statements))
+      }
+      _ => {
+        self.unconsume();
+        self.parse_expression_statement()
       }
     }
+  }
+
+  fn parse_for_statement(&mut self) -> ParseStmtResult {
+    self.match_and_consume_or_err(LeftParen, String::from("Expect '(' after for"))?;
+
+    let initializer = match self.consume()?.token_type {
+      Semicolon => None,
+      Var => {
+        let expr = self.parse_var_declaration()?;
+        Some(Box::new(expr))
+      }
+      _ => {
+        let expr = self.parse_expression_statement()?;
+        Some(Box::new(expr))
+      }
+    };
+
+    let condition = if self.current_token().token_type != Semicolon {
+      self.parse_expression()?
+    } else {
+      Box::new(Expr::Literal(LiteralValue::True))
+    };
+    self.match_and_consume_or_err(Semicolon, String::from("Expected ';' after loop condition"))?;
+
+    let increment = if self.current_token().token_type != RightParen {
+      Some(self.parse_expression()?)
+    } else {
+      None
+    };
+    self.match_and_consume_or_err(RightParen, String::from("Expected ')' after 'for' clause"))?;
+
+    let mut body = self.parse_statement()?;
+
+    if let Some(increment) = increment {
+      body = Stmt::Block(vec![body, Stmt::Expr(*increment)])
+    }
+
+    body = Stmt::While(condition, Box::new(body));
+
+    if let Some(initializer) = initializer {
+      body = Stmt::Block(vec![*initializer, body])
+    }
+
+    Ok(body)
   }
 
   fn parse_if_statement(&mut self) -> ParseStmtResult {
@@ -164,6 +202,16 @@ impl Parser {
     }
 
     Ok(Stmt::Print(*value))
+  }
+
+  fn parse_while_statement(&mut self) -> ParseStmtResult {
+    self.match_and_consume_or_err(LeftParen, String::from("Expected '(' after 'while'"))?;
+    let condition = self.parse_expression()?;
+    self.match_and_consume_or_err(RightParen, String::from("Expected ')' after condition"))?;
+
+    let body = self.parse_statement()?;
+
+    Ok(Stmt::While(condition, Box::new(body)))
   }
 
   fn parse_statements_in_block(&mut self) -> Result<Vec<Stmt>, ParseErr> {
@@ -309,16 +357,7 @@ impl Parser {
   }
 
   fn parse_primary_expression(&mut self) -> ParseExprResult {
-    use TokenType::*;
-
-    let token = match self.consume() {
-      Some(token) => token,
-      // TODO - not sure what the best way to handle this is
-      None => {
-        return self
-          .create_parse_expr_err(&self.current_token(), String::from("Expected expression"))
-      }
-    };
+    let token = self.consume()?;
 
     let expr = match &token.token_type {
       False => Some(Expr::Literal(LiteralValue::False)),
@@ -348,15 +387,26 @@ impl Parser {
     }
   }
 
-  fn consume(&mut self) -> Option<Token> {
+  fn consume(&mut self) -> Result<Token, ParseErr> {
     let current = self.current_token();
 
     if !self.is_at_end() {
       self.current += 1;
-      Some(current)
+      Ok(current)
     } else {
-      None
+      Err(ParseErr::new(
+        &current,
+        format!("Unexpected end of input at token '{}'", &current.lexeme),
+      ))
     }
+  }
+
+  fn unconsume(&mut self) -> Token {
+    if self.current > 0 {
+      self.current -= 1;
+    }
+
+    self.current_token()
   }
 
   fn match_and_consume(&mut self, token_type: TokenType) -> Option<Token> {
@@ -433,7 +483,7 @@ impl Parser {
   }
 
   fn synchronize(&mut self) {
-    self.consume();
+    let _ = self.consume();
 
     use TokenType::*;
     while !self.is_at_end() {
