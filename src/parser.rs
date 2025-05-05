@@ -352,8 +352,12 @@ impl Parser {
 
       Ok(Box::new(Expr::Unary(operator, right)))
     } else {
-      self.parse_primary_expression()
+      self.parse_call_expression()
     }
+  }
+
+  fn parse_call_expression(&mut self) -> ParseExprResult {
+    todo!()
   }
 
   fn parse_primary_expression(&mut self) -> ParseExprResult {

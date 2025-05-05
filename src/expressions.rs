@@ -1,4 +1,4 @@
-use crate::{literals::LiteralValue, statements::Stmt, tokens::Token};
+use crate::{literals::LiteralValue, tokens::Token};
 
 // https://craftinginterpreters.com/representing-code.html#metaprogramming-the-trees
 
@@ -17,6 +17,9 @@ pub enum Expr {
 
   // left, operator, right
   Binary(Box<Expr>, Token, Box<Expr>),
+
+  // callee, paren, arguments
+  Call(Box<Expr>, Token, Vec<Expr>),
 
   // expr
   Grouping(Box<Expr>),
