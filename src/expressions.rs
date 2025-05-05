@@ -5,6 +5,8 @@ use crate::{literals::LiteralValue, tokens::Token};
 #[derive(Debug)]
 pub enum Expr {
   Literal(LiteralValue),
+  // left, operator, right
+  Logical(Box<Expr>, Token, Box<Expr>),
   // name, value
   Assign(Token, Box<Expr>),
   // operator, right

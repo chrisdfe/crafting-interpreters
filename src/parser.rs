@@ -43,10 +43,10 @@ impl Parser {
   }
 
   pub fn parse(tokens: Vec<Token>) -> Vec<Stmt> {
-    Parser::new(tokens).begin_parse()
+    Parser::new(tokens).parse_program()
   }
 
-  fn begin_parse(&mut self) -> Vec<Stmt> {
+  fn parse_program(&mut self) -> Vec<Stmt> {
     let mut stmts = Vec::new();
 
     while !self.is_at_end() {
@@ -192,7 +192,7 @@ impl Parser {
   }
 
   fn parse_assignment_expression(&mut self) -> ParseExprResult {
-    let expr = self.parse_equality_expression()?;
+    let expr = self.parse_or_expression()?;
 
     if self.match_and_consume(Equal).is_some() {
       let equals = self.prev_token();
@@ -207,6 +207,32 @@ impl Parser {
     } else {
       Ok(expr)
     }
+  }
+
+  fn parse_or_expression(&mut self) -> ParseExprResult {
+    //
+    let mut expr = self.parse_and_expression()?;
+
+    while self.match_and_consume(Or).is_some() {
+      let operator = self.prev_token();
+      let right = self.parse_and_expression()?;
+      expr = Box::new(Expr::Logical(expr, operator, right));
+    }
+
+    Ok(expr)
+  }
+
+  fn parse_and_expression(&mut self) -> ParseExprResult {
+    //
+    let mut expr = self.parse_equality_expression()?;
+
+    while self.match_and_consume(And).is_some() {
+      let operator = self.prev_token();
+      let right = self.parse_equality_expression()?;
+      expr = Box::new(Expr::Logical(expr, operator, right))
+    }
+
+    Ok(expr)
   }
 
   fn parse_equality_expression(&mut self) -> ParseExprResult {

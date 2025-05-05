@@ -133,6 +133,19 @@ impl Interpreter {
     use Expr::*;
     match &expr {
       Literal(value) => Ok(value.clone()),
+      Logical(left, operator, right) => {
+        //
+        let left = self.evaluate_expr(left)?;
+        if operator.token_type == TokenType::Or {
+          if left.is_truthy() {
+            return Ok(left);
+          }
+        } else if !left.is_truthy() {
+          return Ok(left);
+        }
+
+        self.evaluate_expr(right)
+      }
       Assign(name, expr) => {
         let value = self.evaluate_expr(expr)?;
         self.environment_stack.assign(name, value).cloned()
