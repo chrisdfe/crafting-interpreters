@@ -18,7 +18,8 @@ pub enum Expr {
   // left, operator, right
   Binary(Box<Expr>, Token, Box<Expr>),
 
-  // callee, paren, arguments
+  // callee, left paren (1), arguments
+  // (1) for error handling
   Call(Box<Expr>, Token, Vec<Expr>),
 
   // expr

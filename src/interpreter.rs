@@ -1,4 +1,7 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
+  callable::TheoFn,
   environments::EnvironmentStack,
   expressions::Expr,
   literals::LiteralValue,
@@ -126,9 +129,10 @@ impl Interpreter {
         Ok(())
       }
 
-      // name, params, body
       Function(name, params, body) => {
-        //
+        let theo_fn = TheoFn::new(name.clone(), params.clone(), body.clone());
+        let fn_literal = LiteralValue::Fn(Rc::new(RefCell::new(theo_fn)));
+        self.environment_stack.define(name, fn_literal);
         Ok(())
       }
     }
@@ -168,7 +172,8 @@ impl Interpreter {
 
       Assign(name, expr) => {
         let value = self.evaluate_expr(expr)?;
-        self.environment_stack.assign(name, value).cloned()
+        self.environment_stack.assign(name, value)?;
+        Ok(self.environment_stack.get(name).unwrap().clone())
       }
 
       Grouping(expr) => self.evaluate_expr(expr),
@@ -181,6 +186,18 @@ impl Interpreter {
 
       Call(callee, paren, arguments) => {
         let callee = self.evaluate_expr(callee)?;
+        let callable = match callee {
+          LiteralValue::Fn(callable) => callable,
+          _ => return Err(RuntimeErr::new(format!("Invalid fn callee: {}", callee))),
+        };
+
+        let mut args_to_pass: Vec<LiteralValue> = Vec::new();
+        for argument in arguments {
+          let arg = self.evaluate_expr(argument)?;
+          args_to_pass.push(arg);
+        }
+
+        callable.borrow_mut().call(self, args_to_pass);
 
         todo!()
       }
@@ -232,6 +249,7 @@ impl Interpreter {
           t => runtime_err(format!("unexpected token type: {:?}", t)),
         }
       }
+
       Plus => {
         // attempt string addition
         if is_string_literal(&left) || is_string_literal(&right) {
@@ -250,6 +268,7 @@ impl Interpreter {
 
         Ok(LiteralValue::Num(left + right))
       }
+
       Greater | GreaterEqual | Less | LessEqual => {
         let (left, right) = match parse_floats_from_binary_expr(&left, &right) {
           Err(err) => return Err(err),
@@ -272,14 +291,17 @@ impl Interpreter {
 
         Ok(literal_value)
       }
+
       EqualEqual => {
         let value = left.equals(&right);
         Ok(LiteralValue::from(value))
       }
+
       BangEqual => {
-        let value = left.equals(&right);
-        Ok(LiteralValue::from(!value))
+        let value = !left.equals(&right);
+        Ok(LiteralValue::from(value))
       }
+
       t => runtime_err(format!(
         "Unexpected operator in binary expression: '{:?}'",
         t

@@ -9,19 +9,19 @@ pub type ParseStmtResult = Result<Stmt, ParseErr>;
 pub type ParseExprResult = Result<Box<Expr>, ParseErr>;
 
 pub struct ParseErr {
-  pub token: Token,
-  pub message: String,
+  pub full_text: String,
 }
 
 impl ParseErr {
-  pub fn new(token: Token, message: String) -> Self {
-    ParseErr { token, message }
+  pub fn new(token: &Token, message: &str) -> Self {
+    let full_text = Self::get_full_text(token, message);
+    ParseErr { full_text }
   }
 
-  pub fn full_text(&self) -> String {
+  fn get_full_text(token: &Token, message: &str) -> String {
     format!(
       "parse error: {} At token '{}' on line {} column {}",
-      &self.message, &self.token.lexeme, &self.token.line, &self.token.column
+      &message, &token.lexeme, &token.line, &token.column
     )
   }
 }
@@ -49,7 +49,7 @@ impl Parser {
     while !self.is_at_end() {
       match self.parse_declaration() {
         Err(err) => {
-          println!("{}", err.full_text())
+          println!("{}", err.full_text)
         }
         Ok(stmt) => {
           if let Some(stmt) = stmt {
@@ -78,7 +78,7 @@ impl Parser {
       Ok(stmt) => Ok(Some(stmt)),
       Err(err) => {
         // TODO - should I not print this here?
-        println!("{}", err.full_text());
+        println!("{}", err.full_text);
         self.synchronize();
         Ok(None)
       }
@@ -94,8 +94,8 @@ impl Parser {
       'build_parameters: loop {
         if parameters.len() > 255 {
           return Err(ParseErr::new(
-            self.current_token().clone(),
-            String::from("Can't have more than 255 parameters"),
+            self.current_token(),
+            "Can't have more than 255 parameters",
           ));
         }
 
@@ -113,7 +113,7 @@ impl Parser {
     self.match_and_consume_or_err(LeftBrace, format!("Expected '{{' before {} body", kind))?;
     let body = self.parse_statements_in_block()?;
 
-    Ok(Stmt::Function(name, parameters, body))
+    Ok(Stmt::Function(name.lexeme, parameters, body))
   }
 
   fn parse_var_declaration(&mut self) -> ParseStmtResult {
@@ -258,8 +258,8 @@ impl Parser {
 
     if self.match_and_consume(RightBrace).is_none() {
       Err(ParseErr::new(
-        self.current_token().clone(),
-        String::from("Expected '}' after block."),
+        self.current_token(),
+        &String::from("Expected '}' after block."),
       ))
     } else {
       Ok(statements)
@@ -393,6 +393,7 @@ impl Parser {
     let mut expr = self.parse_primary_expression()?;
 
     loop {
+      // TODO - the book says we're going to come back and clean this up
       if self.match_and_consume(LeftParen).is_some() {
         expr = Box::new(self.finish_call(*expr)?);
       } else {
@@ -416,8 +417,8 @@ impl Parser {
 
     if arguments.len() > 255 {
       return Err(ParseErr::new(
-        self.current_token().clone(),
-        String::from("Can't have more than 255 arguments"),
+        self.current_token(),
+        &String::from("Can't have more than 255 arguments"),
       ));
     }
 
@@ -431,34 +432,32 @@ impl Parser {
     let token = self.consume();
 
     let expr = match &token.token_type {
-      False => Some(Expr::Literal(LiteralValue::False)),
-      True => Some(Expr::Literal(LiteralValue::True)),
-      Nil => Some(Expr::Literal(LiteralValue::Nil)),
-      Num | Str => Some(Expr::Literal(token.literal)),
-      Identifier => Some(Expr::Variable(self.prev_token().clone())),
+      False => Expr::Literal(LiteralValue::False),
+      True => Expr::Literal(LiteralValue::True),
+      Nil => Expr::Literal(LiteralValue::Nil),
+      Num | Str => Expr::Literal(token.literal),
+      Identifier => Expr::Variable(self.prev_token().clone()),
       LeftParen => {
         let expr = self.parse_expression()?;
 
         if self.match_and_consume(RightParen).is_none() {
           return Err(ParseErr::new(
-            self.current_token().clone(),
-            String::from("Expected ) after expression"),
+            self.current_token(),
+            &String::from("Expected ) after expression"),
           ));
         }
 
-        Some(Expr::Grouping(expr))
+        Expr::Grouping(expr)
       }
-      _ => None,
+      _ => {
+        return Err(ParseErr::new(
+          self.current_token(),
+          &String::from("Expected expression."),
+        ))
+      }
     };
 
-    if let Some(expr) = expr {
-      Ok(Box::new(expr))
-    } else {
-      Err(ParseErr::new(
-        self.current_token().clone(),
-        String::from("Expected expression."),
-      ))
-    }
+    Ok(Box::new(expr))
   }
 
   // TODO - should return a Result
@@ -513,7 +512,7 @@ impl Parser {
       self.consume();
       Ok(token)
     } else {
-      Err(ParseErr::new(token, message))
+      Err(ParseErr::new(&token, &message))
     }
   }
 
@@ -540,11 +539,11 @@ impl Parser {
   }
 
   fn create_parse_stmt_err(&self, message: String) -> Result<Stmt, ParseErr> {
-    Err(ParseErr::new(self.current_token().clone(), message))
+    Err(ParseErr::new(self.current_token(), &message))
   }
 
   fn create_parse_expr_err(&self, token: Token, message: String) -> Result<Box<Expr>, ParseErr> {
-    Err(ParseErr::new(token, message))
+    Err(ParseErr::new(&token, &message))
   }
 
   fn synchronize(&mut self) {

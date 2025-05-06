@@ -9,7 +9,7 @@ pub enum Stmt {
   Expr(Expr),
 
   // name, params, body
-  Function(Token, Vec<Token>, Vec<Stmt>),
+  Function(String, Vec<Token>, Vec<Stmt>),
 
   // condition, thenBranch, elseBranch
   If(Expr, Box<Stmt>, Option<Box<Stmt>>),
