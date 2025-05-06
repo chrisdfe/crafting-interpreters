@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::{callable::Callable, statements::Stmt};
+
 #[derive(Debug, Clone)]
 pub enum LiteralValue {
   Nil,
@@ -7,6 +9,8 @@ pub enum LiteralValue {
   False,
   Num(f32),
   Str(String),
+  // name, arity, parameters, body
+  // Fn(Box<dyn Callable>),
 }
 
 impl Display for LiteralValue {

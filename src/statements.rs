@@ -1,15 +1,20 @@
 use crate::{expressions::Expr, tokens::Token};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
   // statements
   Block(Vec<Stmt>),
 
+  // expression
   Expr(Expr),
+
+  // name, params, body
+  Function(Token, Vec<Token>, Vec<Stmt>),
 
   // condition, thenBranch, elseBranch
   If(Expr, Box<Stmt>, Option<Box<Stmt>>),
 
+  // expression
   Print(Expr),
 
   // name, initializer

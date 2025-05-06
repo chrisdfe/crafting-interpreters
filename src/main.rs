@@ -7,6 +7,7 @@
 
 use std::{fs, io::Write, process::ExitCode};
 
+mod callable;
 mod cli;
 mod environments;
 mod expressions;

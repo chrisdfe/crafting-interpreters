@@ -21,16 +21,21 @@ impl Environment {
     self.values.contains_key(&name.lexeme)
   }
 
-  fn assign(&mut self, name: &Token, value: LiteralValue) -> Result<&LiteralValue, ()> {
+  fn assign(&mut self, name: &Token, value: LiteralValue) -> Result<&LiteralValue, RuntimeErr> {
     if !self.can_assign(name) {
-      return Err(());
+      return Err(RuntimeErr::new(format!(
+        "Unable to assign variable: {} value: {}",
+        name.lexeme, name.literal
+      )));
     }
 
     if self.values.insert(name.lexeme.clone(), value).is_some() {
       Ok(self.values.get(&name.lexeme).unwrap())
     } else {
-      // TODO - probably not the best to silence this error
-      Err(())
+      Err(RuntimeErr::new(format!(
+        "Unable to assign variable: {} value: {}",
+        name.lexeme, name.literal
+      )))
     }
   }
 
@@ -71,6 +76,11 @@ impl EnvironmentStack {
     current.define(name, value);
   }
 
+  pub fn define_global(&mut self, name: &str, value: LiteralValue) {
+    let globals = self.globals_mut().unwrap();
+    globals.define(name, value);
+  }
+
   pub fn assign(&mut self, name: &Token, value: LiteralValue) -> Result<&LiteralValue, RuntimeErr> {
     for env in self.stack.iter_mut().rev() {
       if env.can_assign(name) {
@@ -83,6 +93,26 @@ impl EnvironmentStack {
       "Undefined variable: {}",
       name.lexeme
     )))
+  }
+
+  pub fn assign_global(
+    &mut self,
+    name: &Token,
+    value: LiteralValue,
+  ) -> Result<&LiteralValue, RuntimeErr> {
+    let globals = self.globals_mut()?;
+    globals.assign(name, value)?;
+    Ok(globals.get(name).unwrap())
+  }
+
+  pub fn globals_mut(&mut self) -> Result<&mut Environment, RuntimeErr> {
+    if let Some(env) = self.stack.first_mut() {
+      Ok(env)
+    } else {
+      Err(RuntimeErr::new(String::from(
+        "Somehow ended up with no global environment.",
+      )))
+    }
   }
 
   pub fn current_mut(&mut self) -> Result<&mut Environment, RuntimeErr> {

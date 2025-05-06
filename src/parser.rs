@@ -14,11 +14,8 @@ pub struct ParseErr {
 }
 
 impl ParseErr {
-  pub fn new(token: &Token, message: String) -> Self {
-    ParseErr {
-      token: token.clone(),
-      message,
-    }
+  pub fn new(token: Token, message: String) -> Self {
+    ParseErr { token, message }
   }
 
   pub fn full_text(&self) -> String {
@@ -66,10 +63,15 @@ impl Parser {
   }
 
   fn parse_declaration(&mut self) -> Result<Option<Stmt>, ParseErr> {
-    let result = if self.match_and_consume(Var).is_some() {
-      self.parse_var_declaration()
-    } else {
-      self.parse_statement()
+    let token = self.consume();
+
+    let result = match token.token_type {
+      Fun => self.parse_fn_declaration(String::from("function")),
+      Var => self.parse_var_declaration(),
+      _ => {
+        self.unconsume();
+        self.parse_statement()
+      }
     };
 
     match result {
@@ -81,6 +83,37 @@ impl Parser {
         Ok(None)
       }
     }
+  }
+
+  fn parse_fn_declaration(&mut self, kind: String) -> ParseStmtResult {
+    let name = self.match_and_consume_or_err(Identifier, format!("Expected {} name.", kind))?;
+    self.match_and_consume_or_err(LeftParen, format!("Expected '(' after {} name.", kind))?;
+
+    let mut parameters: Vec<Token> = Vec::new();
+    if !self.current_token_matches(RightParen) {
+      'build_parameters: loop {
+        if parameters.len() > 255 {
+          return Err(ParseErr::new(
+            self.current_token().clone(),
+            String::from("Can't have more than 255 parameters"),
+          ));
+        }
+
+        let parameter =
+          self.match_and_consume_or_err(Identifier, String::from("Expected paramter name"))?;
+        parameters.push(parameter);
+
+        if self.match_and_consume(Comma).is_none() {
+          break 'build_parameters;
+        }
+      }
+    }
+    self.match_and_consume_or_err(Identifier, String::from("Expected parameter name."))?;
+
+    self.match_and_consume_or_err(LeftBrace, format!("Expected '{{' before {} body", kind))?;
+    let body = self.parse_statements_in_block()?;
+
+    Ok(Stmt::Function(name, parameters, body))
   }
 
   fn parse_var_declaration(&mut self) -> ParseStmtResult {
@@ -106,7 +139,7 @@ impl Parser {
   }
 
   fn parse_statement(&mut self) -> ParseStmtResult {
-    let token = self.consume()?;
+    let token = self.consume();
 
     match token.token_type {
       For => self.parse_for_statement(),
@@ -127,7 +160,7 @@ impl Parser {
   fn parse_for_statement(&mut self) -> ParseStmtResult {
     self.match_and_consume_or_err(LeftParen, String::from("Expect '(' after for"))?;
 
-    let initializer = match self.consume()?.token_type {
+    let initializer = match self.consume().token_type {
       Semicolon => None,
       Var => {
         let expr = self.parse_var_declaration()?;
@@ -225,7 +258,7 @@ impl Parser {
 
     if self.match_and_consume(RightBrace).is_none() {
       Err(ParseErr::new(
-        &self.current_token(),
+        self.current_token().clone(),
         String::from("Expected '}' after block."),
       ))
     } else {
@@ -251,14 +284,14 @@ impl Parser {
     let expr = self.parse_or_expression()?;
 
     if self.match_and_consume(Equal).is_some() {
-      let equals = self.prev_token();
+      let equals = self.prev_token().clone();
 
       let value = self.parse_assignment_expression()?;
 
       if let Expr::Variable(name) = expr.as_ref() {
         Ok(Box::new(Expr::Assign(name.clone(), value)))
       } else {
-        self.create_parse_expr_err(&equals, String::from("Invalid asignment target."))
+        self.create_parse_expr_err(equals, String::from("Invalid asignment target."))
       }
     } else {
       Ok(expr)
@@ -270,7 +303,7 @@ impl Parser {
     let mut expr = self.parse_and_expression()?;
 
     while self.match_and_consume(Or).is_some() {
-      let operator = self.prev_token();
+      let operator = self.prev_token().clone();
       let right = self.parse_and_expression()?;
       expr = Box::new(Expr::Logical(expr, operator, right));
     }
@@ -283,7 +316,7 @@ impl Parser {
     let mut expr = self.parse_equality_expression()?;
 
     while self.match_and_consume(And).is_some() {
-      let operator = self.prev_token();
+      let operator = self.prev_token().clone();
       let right = self.parse_equality_expression()?;
       expr = Box::new(Expr::Logical(expr, operator, right))
     }
@@ -383,7 +416,7 @@ impl Parser {
 
     if arguments.len() > 255 {
       return Err(ParseErr::new(
-        &self.current_token(),
+        self.current_token().clone(),
         String::from("Can't have more than 255 arguments"),
       ));
     }
@@ -395,20 +428,20 @@ impl Parser {
   }
 
   fn parse_primary_expression(&mut self) -> ParseExprResult {
-    let token = self.consume()?;
+    let token = self.consume();
 
     let expr = match &token.token_type {
       False => Some(Expr::Literal(LiteralValue::False)),
       True => Some(Expr::Literal(LiteralValue::True)),
       Nil => Some(Expr::Literal(LiteralValue::Nil)),
       Num | Str => Some(Expr::Literal(token.literal)),
-      Identifier => Some(Expr::Variable(self.prev_token())),
+      Identifier => Some(Expr::Variable(self.prev_token().clone())),
       LeftParen => {
         let expr = self.parse_expression()?;
 
         if self.match_and_consume(RightParen).is_none() {
           return Err(ParseErr::new(
-            &self.current_token(),
+            self.current_token().clone(),
             String::from("Expected ) after expression"),
           ));
         }
@@ -421,22 +454,20 @@ impl Parser {
     if let Some(expr) = expr {
       Ok(Box::new(expr))
     } else {
-      self.create_parse_expr_err(&self.current_token(), String::from("Expected expression."))
+      Err(ParseErr::new(
+        self.current_token().clone(),
+        String::from("Expected expression."),
+      ))
     }
   }
 
-  fn consume(&mut self) -> Result<Token, ParseErr> {
-    let current = self.current_token();
-
+  // TODO - should return a Result
+  fn consume(&mut self) -> Token {
     if !self.is_at_end() {
       self.current += 1;
-      Ok(current)
-    } else {
-      Err(ParseErr::new(
-        &current,
-        format!("Unexpected end of input at token '{}'", &current.lexeme),
-      ))
     }
+
+    self.prev_token().clone()
   }
 
   fn unconsume(&mut self) -> Token {
@@ -444,11 +475,11 @@ impl Parser {
       self.current -= 1;
     }
 
-    self.current_token()
+    self.current_token().clone()
   }
 
   fn match_and_consume(&mut self, token_type: TokenType) -> Option<Token> {
-    let token = self.current_token();
+    let token = self.current_token().clone();
     if token.token_type == token_type {
       self.consume();
       Some(token)
@@ -458,7 +489,7 @@ impl Parser {
   }
 
   fn match_one_of_and_consume(&mut self, token_types: Vec<TokenType>) -> Option<Token> {
-    let token = self.current_token();
+    let token = self.current_token().clone();
     let matches = token_types
       .into_iter()
       .any(|token_type| token.token_type == token_type);
@@ -477,21 +508,17 @@ impl Parser {
     token_type: TokenType,
     message: String,
   ) -> Result<Token, ParseErr> {
-    let token = self.current_token();
+    let token = self.current_token().clone();
     if token.token_type == token_type {
       self.consume();
       Ok(token)
     } else {
-      Err(ParseErr::new(&self.current_token(), message))
+      Err(ParseErr::new(token, message))
     }
   }
 
   fn current_token_matches(&self, token_type: TokenType) -> bool {
-    if self.is_at_end() {
-      false
-    } else {
-      self.current_token().token_type == token_type
-    }
+    self.current_token().token_type == token_type
   }
 
   fn is_at_end(&self) -> bool {
@@ -503,20 +530,20 @@ impl Parser {
     self.tokens.get(self.current + 1).unwrap().clone()
   }
 
-  fn current_token(&self) -> Token {
-    self.tokens.get(self.current).unwrap().clone()
+  fn current_token(&self) -> &Token {
+    self.tokens.get(self.current).unwrap()
   }
 
-  fn prev_token(&self) -> Token {
+  fn prev_token(&self) -> &Token {
     // Note - will panic if self.current == 0
-    self.tokens.get(self.current - 1).unwrap().clone()
+    self.tokens.get(self.current - 1).unwrap()
   }
 
   fn create_parse_stmt_err(&self, message: String) -> Result<Stmt, ParseErr> {
-    Err(ParseErr::new(&self.current_token(), message))
+    Err(ParseErr::new(self.current_token().clone(), message))
   }
 
-  fn create_parse_expr_err(&self, token: &Token, message: String) -> Result<Box<Expr>, ParseErr> {
+  fn create_parse_expr_err(&self, token: Token, message: String) -> Result<Box<Expr>, ParseErr> {
     Err(ParseErr::new(token, message))
   }
 

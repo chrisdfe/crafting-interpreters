@@ -125,6 +125,12 @@ impl Interpreter {
 
         Ok(())
       }
+
+      // name, params, body
+      Function(name, params, body) => {
+        //
+        Ok(())
+      }
     }
   }
 
@@ -145,6 +151,7 @@ impl Interpreter {
     use Expr::*;
     match &expr {
       Literal(value) => Ok(value.clone()),
+
       Logical(left, operator, right) => {
         //
         let left = self.evaluate_expr(left)?;
@@ -158,14 +165,25 @@ impl Interpreter {
 
         self.evaluate_expr(right)
       }
+
       Assign(name, expr) => {
         let value = self.evaluate_expr(expr)?;
         self.environment_stack.assign(name, value).cloned()
       }
+
       Grouping(expr) => self.evaluate_expr(expr),
+
       Unary(operator, right) => self.evaluate_unary_expr(operator, right),
+
       Binary(left, operator, right) => self.evaluate_binary_expr(left, operator, right),
+
       Variable(value) => self.environment_stack.get(value).cloned(),
+
+      Call(callee, paren, arguments) => {
+        let callee = self.evaluate_expr(callee)?;
+
+        todo!()
+      }
     }
   }
 
