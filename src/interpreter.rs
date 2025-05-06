@@ -197,9 +197,8 @@ impl Interpreter {
           args_to_pass.push(arg);
         }
 
-        callable.call(self, args_to_pass);
-
-        todo!()
+        let return_value = callable.call(self, args_to_pass);
+        Ok(return_value)
       }
     }
   }
