@@ -4,7 +4,7 @@ use std::fmt::Debug;
 pub trait TheoCallable: Debug {
   fn name(&self) -> &String;
   fn arity(&self) -> usize;
-  fn call(&mut self, interpreter: &mut Interpreter, arguments: Vec<LiteralValue>) -> LiteralValue;
+  fn call(&self, interpreter: &mut Interpreter, arguments: Vec<LiteralValue>) -> LiteralValue;
 }
 
 impl std::fmt::Display for dyn TheoCallable {
@@ -30,7 +30,7 @@ impl TheoCallable for TheoFn {
     self._arity
   }
 
-  fn call(&mut self, interpreter: &mut Interpreter, arguments: Vec<LiteralValue>) -> LiteralValue {
+  fn call(&self, interpreter: &mut Interpreter, arguments: Vec<LiteralValue>) -> LiteralValue {
     todo!()
   }
 }

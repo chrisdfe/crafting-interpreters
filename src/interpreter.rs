@@ -131,7 +131,7 @@ impl Interpreter {
 
       Function(name, params, body) => {
         let theo_fn = TheoFn::new(name.clone(), params.clone(), body.clone());
-        let fn_literal = LiteralValue::Fn(Rc::new(RefCell::new(theo_fn)));
+        let fn_literal = LiteralValue::Fn(Rc::new(theo_fn));
         self.environment_stack.define(name, fn_literal);
         Ok(())
       }
@@ -197,7 +197,7 @@ impl Interpreter {
           args_to_pass.push(arg);
         }
 
-        callable.borrow_mut().call(self, args_to_pass);
+        callable.call(self, args_to_pass);
 
         todo!()
       }

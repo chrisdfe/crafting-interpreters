@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Display, rc::Rc};
+use std::{fmt::Display, rc::Rc};
 
 use crate::callable::TheoCallable;
 
@@ -9,9 +9,7 @@ pub enum LiteralValue {
   False,
   Num(f32),
   Str(String),
-  // name, parameters, body
-  // Fn(String, Vec<Token>, Vec<Stmt>),
-  Fn(Rc<RefCell<dyn TheoCallable>>),
+  Fn(Rc<dyn TheoCallable>),
 }
 
 impl Display for LiteralValue {
@@ -23,7 +21,7 @@ impl Display for LiteralValue {
       False => write!(f, "false"),
       Str(s) => write!(f, "{}", s),
       Num(n) => write!(f, "{}", n),
-      Fn(callable) => write!(f, "<fn {}>", callable.borrow().name()),
+      Fn(callable) => write!(f, "<fn {}>", callable.name()),
     }
   }
 }
@@ -47,7 +45,7 @@ impl LiteralValue {
       False => String::from("false"),
       Num(n) => format!("{}", n),
       Str(s) => s.clone(),
-      Fn(callable) => format!("<fn {}>", callable.borrow().name()),
+      Fn(callable) => format!("<fn {}>", callable.name()),
     }
   }
 
