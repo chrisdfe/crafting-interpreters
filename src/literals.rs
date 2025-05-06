@@ -1,6 +1,6 @@
 use std::{fmt::Display, rc::Rc};
 
-use crate::callable::TheoCallable;
+use crate::callable::BeaCallable;
 
 #[derive(Debug, Clone)]
 pub enum LiteralValue {
@@ -9,7 +9,7 @@ pub enum LiteralValue {
   False,
   Num(f32),
   Str(String),
-  Fn(Rc<dyn TheoCallable>),
+  Fn(Rc<dyn BeaCallable>),
 }
 
 impl Display for LiteralValue {

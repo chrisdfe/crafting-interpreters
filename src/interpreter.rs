@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-  callable::TheoFn,
+  callable::BeaFn,
   environments::EnvironmentStack,
   expressions::Expr,
   literals::LiteralValue,
@@ -144,8 +144,8 @@ impl Interpreter {
       }
 
       Function(name, params, body) => {
-        let theo_fn = TheoFn::new(name.clone(), params.clone(), body.clone());
-        let fn_literal = LiteralValue::Fn(Rc::new(theo_fn));
+        let fn_definition = BeaFn::new(name.clone(), params.clone(), body.clone());
+        let fn_literal = LiteralValue::Fn(Rc::new(fn_definition));
         self.environment_stack.define(name, fn_literal);
         Ok(())
       }
