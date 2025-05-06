@@ -26,29 +26,6 @@ use scanner::Scanner;
 fn main() -> ExitCode {
   let args = get_args();
 
-  /*
-  // TODO - handle both cargo run & regular script running
-  // with cargo run, 'run' is arg 1
-  if args.len() > 2 {
-    println!("usage: lox [script]");
-    return ExitCode::from(64);
-  }
-
-  // args[0] will be 'run', so args[1] is the one we want
-  if args.len() < 2 {
-    println!("filename arg required");
-    return ExitCode::from(64);
-  }
-
-  let _ = match read_file(&args[1]) {
-    Err(_) => {
-      println!("Couldn't read file '{}'", &args[1]);
-      return ExitCode::FAILURE;
-    }
-    Ok(_) => 1,
-  };
-  */
-
   if let Some(filename) = args.filename {
     //
     match read_file(filename) {
@@ -100,10 +77,18 @@ fn interpret_input(input: String, interpreter: &mut Interpreter) {
   //   println!("{:?}", &token);
   // }
 
-  let statements = Parser::parse(tokens);
+  let statements = match Parser::parse(tokens) {
+    Ok(statements) => statements,
+    Err(err) => {
+      println!("{}", err.full_text);
+      return;
+    }
+  };
 
-  let result = interpreter.interpret(statements);
-  if let Err(err) = result {
-    println!("{}", err.message);
+  match interpreter.interpret(statements) {
+    Ok(_) => (),
+    Err(err) => {
+      println!("{}", err.message);
+    }
   }
 }

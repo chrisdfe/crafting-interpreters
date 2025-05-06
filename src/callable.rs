@@ -1,10 +1,19 @@
-use crate::{interpreter::Interpreter, literals::LiteralValue, statements::Stmt, tokens::Token};
+use crate::{
+  interpreter::{Interpreter, RuntimeErr},
+  literals::LiteralValue,
+  statements::Stmt,
+  tokens::Token,
+};
 use std::fmt::Debug;
 
 pub trait TheoCallable: Debug {
   fn name(&self) -> &String;
   fn arity(&self) -> usize;
-  fn call(&self, interpreter: &mut Interpreter, arguments: Vec<LiteralValue>) -> LiteralValue;
+  fn call(
+    &self,
+    interpreter: &mut Interpreter,
+    arguments: Vec<LiteralValue>,
+  ) -> Result<LiteralValue, RuntimeErr>;
 }
 
 impl std::fmt::Display for dyn TheoCallable {
@@ -16,7 +25,6 @@ impl std::fmt::Display for dyn TheoCallable {
 #[derive(Debug)]
 pub struct TheoFn {
   _name: String,
-  _arity: usize,
   params: Vec<Token>,
   body: Vec<Stmt>,
 }
@@ -27,11 +35,29 @@ impl TheoCallable for TheoFn {
   }
 
   fn arity(&self) -> usize {
-    self._arity
+    self.params.len()
   }
 
-  fn call(&self, interpreter: &mut Interpreter, arguments: Vec<LiteralValue>) -> LiteralValue {
-    todo!()
+  fn call(
+    &self,
+    interpreter: &mut Interpreter,
+    arguments: Vec<LiteralValue>,
+  ) -> Result<LiteralValue, RuntimeErr> {
+    interpreter.environment_stack.push();
+
+    // add function arguments to scope
+    for (idx, param) in self.params.iter().enumerate() {
+      interpreter
+        .environment_stack
+        .define(&param.lexeme, arguments[idx].clone());
+    }
+
+    interpreter.execute_block(&self.body)?;
+
+    interpreter.environment_stack.push();
+
+    // TODO - ? return values ?
+    Ok(LiteralValue::Nil)
   }
 }
 
@@ -39,7 +65,6 @@ impl TheoFn {
   pub fn new(name: String, params: Vec<Token>, body: Vec<Stmt>) -> Self {
     Self {
       _name: name,
-      _arity: 0,
       params,
       body,
     }

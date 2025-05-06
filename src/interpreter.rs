@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 
 use crate::{
   callable::TheoFn,
@@ -55,7 +55,7 @@ pub struct Interpreter {
   //        I might have to change this when I get into functions
   //        (1) https://craftinginterpreters.com/statements-and-state.html#nesting-and-shadowing
   //        (2) https://craftinginterpreters.com/statements-and-state.html#block-syntax-and-semantics
-  environment_stack: EnvironmentStack,
+  pub environment_stack: EnvironmentStack,
 }
 
 impl Interpreter {
@@ -76,12 +76,26 @@ impl Interpreter {
     Ok(())
   }
 
+  // Note - the caller is responsible for pushing to/popping off of the environment stack
+  pub fn execute_block(&mut self, statements: &Vec<Stmt>) -> Result<(), RuntimeErr> {
+    //
+    for statement in statements {
+      self.execute_stmt(statement)?;
+    }
+
+    Ok(())
+  }
+
   fn execute_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeErr> {
     use Stmt::*;
     match stmt {
       Block(statements) => {
         //
+        self.environment_stack.push();
+
         self.execute_block(statements)?;
+
+        self.environment_stack.pop();
         Ok(())
       }
 
@@ -138,19 +152,6 @@ impl Interpreter {
     }
   }
 
-  fn execute_block(&mut self, statements: &Vec<Stmt>) -> Result<(), RuntimeErr> {
-    //
-    self.environment_stack.push();
-
-    //
-    for statement in statements {
-      self.execute_stmt(statement)?;
-    }
-
-    let _ = self.environment_stack.pop();
-    Ok(())
-  }
-
   fn evaluate_expr(&mut self, expr: &Expr) -> Result<LiteralValue, RuntimeErr> {
     use Expr::*;
     match &expr {
@@ -191,13 +192,21 @@ impl Interpreter {
           _ => return Err(RuntimeErr::new(format!("Invalid fn callee: {}", callee))),
         };
 
-        let mut args_to_pass: Vec<LiteralValue> = Vec::new();
-        for argument in arguments {
-          let arg = self.evaluate_expr(argument)?;
-          args_to_pass.push(arg);
+        if arguments.len() != callable.arity() {
+          return Err(RuntimeErr::new(format!(
+            "Expected {} arguments but got {}.",
+            callable.arity(),
+            arguments.len()
+          )));
         }
 
-        let return_value = callable.call(self, args_to_pass);
+        let evaluated_arguments = arguments
+          .iter()
+          .map(|arg| self.evaluate_expr(arg))
+          .collect::<Result<Vec<LiteralValue>, RuntimeErr>>()?;
+
+        let return_value = callable.call(self, evaluated_arguments)?;
+
         Ok(return_value)
       }
     }

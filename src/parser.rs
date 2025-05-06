@@ -39,27 +39,20 @@ impl Parser {
     Self { tokens, current: 0 }
   }
 
-  pub fn parse(tokens: Vec<Token>) -> Vec<Stmt> {
+  pub fn parse(tokens: Vec<Token>) -> Result<Vec<Stmt>, ParseErr> {
     Parser::new(tokens).parse_program()
   }
 
-  fn parse_program(&mut self) -> Vec<Stmt> {
+  fn parse_program(&mut self) -> Result<Vec<Stmt>, ParseErr> {
     let mut stmts = Vec::new();
 
     while !self.is_at_end() {
-      match self.parse_declaration() {
-        Err(err) => {
-          println!("{}", err.full_text)
-        }
-        Ok(stmt) => {
-          if let Some(stmt) = stmt {
-            stmts.push(stmt);
-          }
-        }
+      if let Some(stmt) = self.parse_declaration()? {
+        stmts.push(stmt);
       }
     }
 
-    stmts
+    Ok(stmts)
   }
 
   fn parse_declaration(&mut self) -> Result<Option<Stmt>, ParseErr> {
@@ -100,7 +93,7 @@ impl Parser {
         }
 
         let parameter =
-          self.match_and_consume_or_err(Identifier, String::from("Expected paramter name"))?;
+          self.match_and_consume_or_err(Identifier, String::from("Expected parameter name"))?;
         parameters.push(parameter);
 
         if self.match_and_consume(Comma).is_none() {
@@ -108,7 +101,7 @@ impl Parser {
         }
       }
     }
-    self.match_and_consume_or_err(Identifier, String::from("Expected parameter name."))?;
+    self.match_and_consume_or_err(RightParen, String::from("Expected ')' after parameters."))?;
 
     self.match_and_consume_or_err(LeftBrace, format!("Expected '{{' before {} body", kind))?;
     let body = self.parse_statements_in_block()?;

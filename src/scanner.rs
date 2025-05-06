@@ -13,6 +13,7 @@ lazy_static! {
     ("else", TokenType::Else), //
     ("false", TokenType::False), //
     ("for", TokenType::For), //
+    ("fun", TokenType::Fun), //
     ("if", TokenType::If), //
     ("nil", TokenType::Nil), //
     ("or", TokenType::Or), //
@@ -39,6 +40,7 @@ pub struct Scanner {
   start: usize,
   current: usize,
   line: usize,
+  column: usize,
 }
 
 impl Scanner {
@@ -50,6 +52,7 @@ impl Scanner {
       start: 0,
       current: 0,
       line: 1,
+      column: 1,
     }
   }
 
@@ -79,7 +82,7 @@ impl Scanner {
       lexeme: String::from(""),
       literal: LiteralValue::Nil,
       line: self.line,
-      column: self.current % self.line,
+      column: self.column,
     });
   }
 
@@ -145,6 +148,7 @@ impl Scanner {
       ' ' | '\r' | '\t' => {}
       '\n' => {
         self.line += 1;
+        self.column = 1;
       }
       c => {
         if is_alpha(c) {
@@ -222,8 +226,7 @@ impl Scanner {
     self.errors.push(ScanErr {
       message,
       line: self.line,
-      // TODO - I think this is wrong
-      column: self.current,
+      column: self.column,
     });
   }
 
@@ -249,6 +252,7 @@ impl Scanner {
   // 2) increments like this (in java) "source[current++]", so the character returned is actually for the previous character to self.current
   fn advance_char(&mut self) -> char {
     self.current += 1;
+    self.column += 1;
     self.current_char()
   }
 
@@ -264,12 +268,13 @@ impl Scanner {
 
   fn add_token(&mut self, token_type: TokenType) {
     let text = get_char_substr(&self.source, self.start, self.current);
+
     self.tokens.push(Token {
       token_type,
       literal: LiteralValue::Nil,
       lexeme: text,
       line: self.line,
-      column: self.current % self.line,
+      column: self.column,
     });
   }
 
@@ -280,7 +285,7 @@ impl Scanner {
       literal,
       lexeme: text,
       line: self.line,
-      column: self.current % self.line,
+      column: self.column,
     });
   }
 
