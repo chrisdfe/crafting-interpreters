@@ -84,20 +84,9 @@ impl EnvironmentStack {
     self.head_idx = new_head_idx;
   }
 
-  pub fn get_parent(&self, env: &Environment) -> Option<&Environment> {
-    if let Some(parent_idx) = env.parent_idx {
-      if let Some(env) = self.environments.get(parent_idx) {
-        if let Some(env) = env {
-          return Some(env);
-        }
-      }
-    }
-
-    None
-  }
-
-  /// Adds a child environment to parent_idx, but does NOT update head environment
-  pub fn add_detached_child(&mut self, parent_idx: usize) -> Result<usize, RuntimeErr> {
+  /// Adds a child environment to parent_idx but does NOT update head environment
+  /// Returns the index of the new environment
+  pub fn add_detached_child(&mut self, parent_idx: usize) -> Result<EnvironmentIndex, RuntimeErr> {
     if self.environments.get(parent_idx).is_none() {
       return Err(RuntimeErr::new(format!(
         "unable to add new environment: parent at idx '{}' not found",
@@ -113,8 +102,12 @@ impl EnvironmentStack {
     Ok(idx)
   }
 
-  /// Pushes a new environment onto the head, with its parent set to parent_idx
-  pub fn push_child(&mut self, parent_idx: usize) -> Result<&Environment, RuntimeErr> {
+  /// Pushes a new environment onto the head with its parent set to parent_idx
+  /// Returns the index of the new child
+  pub fn push_child(
+    &mut self,
+    parent_idx: EnvironmentIndex,
+  ) -> Result<EnvironmentIndex, RuntimeErr> {
     if self.environments.get(parent_idx).is_none() {
       return Err(RuntimeErr::new(format!(
         "unable to add new environment: parent at idx '{}' not found",
@@ -126,11 +119,12 @@ impl EnvironmentStack {
     let head = self.get_env_at_head_mut_or_err()?;
     head.parent_idx = Some(parent_idx);
 
-    Ok(self.get_env_by_idx_or_err(self.head_idx)?)
+    Ok(self.head_idx)
   }
 
-  // Pushes a new environment onto the head
-  pub fn push(&mut self) -> &Environment {
+  /// Pushes a new environment onto the head
+  /// Returns the index of the new environment
+  pub fn push(&mut self) -> EnvironmentIndex {
     let prev_head_idx = self.head_idx;
     self.head_idx = self.environments.len();
     let env = Environment::new(self.head_idx, Some(prev_head_idx));
@@ -139,7 +133,7 @@ impl EnvironmentStack {
     self.environments.push(Some(env));
 
     // unwrap is safe here because we literally just added this env
-    self.get_env_by_idx_or_err(self.head_idx).unwrap()
+    self.head_idx
   }
 
   /// Clears head environment & sets head idx to its parent
@@ -163,7 +157,7 @@ impl EnvironmentStack {
     Ok(())
   }
 
-  /// Clears (i.e sets to None)
+  /// Clears (i.e sets to None) environment at idx
   pub fn remove_at_idx(&mut self, idx: usize) -> Result<(), RuntimeErr> {
     let env = self.get_env_by_idx_or_err(idx)?;
     let idx = env.idx;
@@ -177,6 +171,7 @@ impl EnvironmentStack {
     Ok(())
   }
 
+  /// Defines a variable in the env at idx
   pub fn define_at_idx(
     &mut self,
     idx: usize,
@@ -188,17 +183,19 @@ impl EnvironmentStack {
     Ok(())
   }
 
+  /// Defines a variable at the head environment
   pub fn define_at_head(&mut self, name: &str, value: LiteralValue) -> Result<(), RuntimeErr> {
     self.define_at_idx(self.head_idx, name, value)
   }
 
+  /// Assigns a variable in the env at idx
   pub fn assign_at_idx(
     &mut self,
     idx: usize,
     name: &Token,
     value: LiteralValue,
   ) -> Result<&LiteralValue, RuntimeErr> {
-    if let Some(idx) = self.get_first_assignable_idx(idx, name, &value)? {
+    if let Some(idx) = self.get_first_assignable_idx(idx, name)? {
       let environment = self.get_env_by_idx_mut_or_err(idx)?;
       environment.assign(name, value)
     } else {
@@ -209,6 +206,7 @@ impl EnvironmentStack {
     }
   }
 
+  /// Assigns a variable at the head env
   pub fn assign_at_head(
     &mut self,
     name: &Token,
@@ -239,6 +237,7 @@ impl EnvironmentStack {
     Ok(value)
   }
 
+  /// Searches recursively for a variable
   pub fn get_value_at_head(&self, name: &Token) -> Result<Option<&LiteralValue>, RuntimeErr> {
     self.get_value_in_env(self.head_idx, name)
   }
@@ -250,10 +249,10 @@ impl EnvironmentStack {
       }
     }
 
-    return Err(RuntimeErr::new(format!(
+    Err(RuntimeErr::new(format!(
       "No environment found at idx {}",
       idx
-    )));
+    )))
   }
 
   pub fn get_env_by_idx_mut_or_err(&mut self, idx: usize) -> Result<&mut Environment, RuntimeErr> {
@@ -263,10 +262,10 @@ impl EnvironmentStack {
       }
     }
 
-    return Err(RuntimeErr::new(format!(
+    Err(RuntimeErr::new(format!(
       "No environment found at idx {}",
       idx
-    )));
+    )))
   }
 
   fn get_env_at_head_or_err(&self) -> Result<&Environment, RuntimeErr> {
@@ -282,13 +281,12 @@ impl EnvironmentStack {
     &self,
     idx: usize,
     name: &Token,
-    value: &LiteralValue,
   ) -> Result<Option<usize>, RuntimeErr> {
     let environment = self.get_env_by_idx_or_err(idx)?;
     if environment.can_assign(name) {
       Ok(Some(environment.idx))
     } else if let Some(parent_idx) = environment.parent_idx {
-      self.get_first_assignable_idx(parent_idx, name, value)
+      self.get_first_assignable_idx(parent_idx, name)
     } else {
       Ok(None)
     }
