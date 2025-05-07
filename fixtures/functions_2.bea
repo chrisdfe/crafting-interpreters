@@ -1,6 +1,6 @@
 fun count(a, b, c) {
-  print a + b + c;
+  println(a + b + c);
 }
 
 count(2, 3, 4);
-print count;
+println(count);

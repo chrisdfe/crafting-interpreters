@@ -1,6 +1,6 @@
 var a = 0;
 while (a < 10) {
   a = a + 1;
-  print a;
+  println(a);
 }
-print "done. " + a;
+println("done. " + a);

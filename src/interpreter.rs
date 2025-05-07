@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-  callable::BeaFn,
+  callable::{self, BeaFn},
   environments::EnvironmentStack,
   expressions::Expr,
   literals::LiteralValue,
@@ -66,6 +66,13 @@ impl Interpreter {
   }
 
   pub fn interpret(&mut self, stmts: Vec<Stmt>) -> Result<(), RuntimeErr> {
+    // First - define globals
+    self.environment_stack.define(
+      "println",
+      LiteralValue::Fn(Rc::new(callable::BeaBuiltinPrintln)),
+    );
+
+    // Next - start interpreting
     for stmt in stmts.iter() {
       match self.execute_stmt(stmt) {
         Ok(_) => (),

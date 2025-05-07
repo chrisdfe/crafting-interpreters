@@ -137,7 +137,6 @@ impl Parser {
     match token.token_type {
       For => self.parse_for_statement(),
       If => self.parse_if_statement(),
-      Print => self.parse_print_statement(),
       While => self.parse_while_statement(),
       LeftBrace => {
         let statements = self.parse_statements_in_block()?;
@@ -220,16 +219,6 @@ impl Parser {
     Ok(Stmt::If(*condition, then_branch, else_branch))
   }
 
-  fn parse_print_statement(&mut self) -> ParseStmtResult {
-    let value = self.parse_expression()?;
-
-    if self.match_and_consume(Semicolon).is_none() {
-      return self.create_parse_stmt_err(String::from("Expect ';' after value."));
-    }
-
-    Ok(Stmt::Print(*value))
-  }
-
   fn parse_while_statement(&mut self) -> ParseStmtResult {
     self.match_and_consume_or_err(LeftParen, String::from("Expected '(' after 'while'"))?;
     let condition = self.parse_expression()?;
@@ -263,7 +252,7 @@ impl Parser {
     let expr = self.parse_expression()?;
 
     if self.match_and_consume(Semicolon).is_none() {
-      return self.create_parse_stmt_err(String::from("Expect ';' after value."));
+      return self.create_parse_stmt_err(String::from("Expected ';' after value."));
     }
 
     Ok(Stmt::Expr(*expr))
@@ -549,7 +538,7 @@ impl Parser {
       }
 
       match self.peek().token_type {
-        Class | Fun | Var | For | If | While | Print | Return => (),
+        Class | Fun | Var | For | If | While | Return => (),
         _ => {
           self.consume();
         }

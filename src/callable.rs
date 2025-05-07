@@ -7,7 +7,7 @@ use crate::{
 use std::fmt::Debug;
 
 pub trait BeaCallable: Debug {
-  fn name(&self) -> &String;
+  fn name(&self) -> String;
   fn arity(&self) -> usize;
   fn call(
     &self,
@@ -30,8 +30,8 @@ pub struct BeaFn {
 }
 
 impl BeaCallable for BeaFn {
-  fn name(&self) -> &String {
-    &self._name
+  fn name(&self) -> String {
+    self._name.clone()
   }
 
   fn arity(&self) -> usize {
@@ -68,5 +68,26 @@ impl BeaFn {
       params,
       body,
     }
+  }
+}
+
+#[derive(Debug)]
+pub struct BeaBuiltinPrintln;
+impl BeaCallable for BeaBuiltinPrintln {
+  fn name(&self) -> String {
+    "println".to_string()
+  }
+
+  fn arity(&self) -> usize {
+    1
+  }
+
+  fn call(
+    &self,
+    interpreter: &mut Interpreter,
+    arguments: Vec<LiteralValue>,
+  ) -> Result<LiteralValue, RuntimeErr> {
+    println!("{}", arguments[0].cast_string());
+    Ok(LiteralValue::Nil)
   }
 }

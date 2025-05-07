@@ -1,5 +1,5 @@
 fun count(n) {
-  print n;
+  println(n);
   
   if (n > 1) {
     count(n - 1);
