@@ -137,6 +137,7 @@ impl Parser {
     match token.token_type {
       For => self.parse_for_statement(),
       If => self.parse_if_statement(),
+      Return => self.parse_return_statement(),
       While => self.parse_while_statement(),
       LeftBrace => {
         let statements = self.parse_statements_in_block()?;
@@ -217,6 +218,20 @@ impl Parser {
     };
 
     Ok(Stmt::If(*condition, then_branch, else_branch))
+  }
+
+  fn parse_return_statement(&mut self) -> ParseStmtResult {
+    //
+    let keyword = self.prev_token().clone();
+    let value = if self.match_and_consume(Semicolon).is_none() {
+      let value = self.parse_expression()?;
+      Some(value)
+    } else {
+      None
+    };
+
+    self.match_and_consume_or_err(Semicolon, "Expected ';' after return value.".to_string())?;
+    Ok(Stmt::Return(keyword, value))
   }
 
   fn parse_while_statement(&mut self) -> ParseStmtResult {

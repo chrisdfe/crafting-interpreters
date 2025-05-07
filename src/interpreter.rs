@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::{
   callable::{self, BeaFn},
+  control_flow::BeaControlFlow,
   environments::EnvironmentStack,
   expressions::Expr,
   literals::LiteralValue,
@@ -75,7 +76,11 @@ impl Interpreter {
     // Next - start interpreting
     for stmt in stmts.iter() {
       match self.execute_stmt(stmt) {
-        Ok(_) => (),
+        Ok(ctrl) => {
+          if let BeaControlFlow::Return(value) = ctrl {
+            return Ok(());
+          }
+        }
         Err(err) => return Err(err),
       };
     }
@@ -84,50 +89,59 @@ impl Interpreter {
   }
 
   // Note - the caller is responsible for pushing to/popping off of the environment stack
-  pub fn execute_block(&mut self, statements: &Vec<Stmt>) -> Result<(), RuntimeErr> {
-    //
+  pub fn execute_block(&mut self, statements: &Vec<Stmt>) -> Result<BeaControlFlow, RuntimeErr> {
     for statement in statements {
-      self.execute_stmt(statement)?;
+      match self.execute_stmt(statement)? {
+        BeaControlFlow::Continue => (),
+        BeaControlFlow::Return(value) => {
+          return Ok(BeaControlFlow::Return(value));
+        }
+      }
     }
 
-    Ok(())
+    Ok(BeaControlFlow::Continue)
   }
 
-  fn execute_stmt(&mut self, stmt: &Stmt) -> Result<(), RuntimeErr> {
+  fn execute_stmt(&mut self, stmt: &Stmt) -> Result<BeaControlFlow, RuntimeErr> {
     use Stmt::*;
     match stmt {
       Block(statements) => {
         //
         self.environment_stack.push();
 
-        self.execute_block(statements)?;
+        let value = self.execute_block(statements)?;
 
         self.environment_stack.pop();
-        Ok(())
+
+        Ok(value)
       }
 
       Expr(expr) => match self.evaluate_expr(expr) {
         Err(err) => Err(err),
-        Ok(_) => Ok(()),
+        Ok(_) => Ok(BeaControlFlow::Continue),
       },
 
       If(cond, then_branch, else_branch) => {
         let value = self.evaluate_expr(cond)?;
-        if value.is_truthy() {
-          self.execute_stmt(then_branch)?;
+        let value = if value.is_truthy() {
+          self.execute_stmt(then_branch)?
         } else if let Some(else_branch) = else_branch {
-          self.execute_stmt(else_branch)?;
+          self.execute_stmt(else_branch)?
+        } else {
+          BeaControlFlow::Continue
         };
 
-        Ok(())
+        Ok(value)
       }
 
-      Print(expr) => {
-        let value = self.evaluate_expr(expr)?;
+      Return(token, value) => {
+        let value = if let Some(value) = value {
+          self.evaluate_expr(value)?
+        } else {
+          LiteralValue::Nil
+        };
 
-        println!("{}", value.cast_string());
-
-        Ok(())
+        Ok(BeaControlFlow::Return(value))
       }
 
       Var(name, initializer) => {
@@ -139,22 +153,25 @@ impl Interpreter {
         self.environment_stack.define(&name.lexeme, value);
 
         //
-        Ok(())
+        Ok(BeaControlFlow::Continue)
       }
 
       While(condition, body) => {
         while (self.evaluate_expr(condition))?.is_truthy() {
-          self.execute_stmt(body)?;
+          if let BeaControlFlow::Return(value) = self.execute_stmt(body)? {
+            return Ok(BeaControlFlow::Return(value));
+          }
         }
 
-        Ok(())
+        Ok(BeaControlFlow::Continue)
       }
 
       Function(name, params, body) => {
         let fn_definition = BeaFn::new(name.clone(), params.clone(), body.clone());
         let fn_literal = LiteralValue::Fn(Rc::new(fn_definition));
         self.environment_stack.define(name, fn_literal);
-        Ok(())
+
+        Ok(BeaControlFlow::Continue)
       }
     }
   }
@@ -276,6 +293,7 @@ impl Interpreter {
           return Ok(LiteralValue::Str(value));
         }
 
+        // fall back to number
         let (left, right) = match parse_floats_from_binary_expr(&left, &right) {
           Err(err) => return Err(err),
           Ok((left, right)) => (left, right),

@@ -9,6 +9,7 @@ use std::{fs, io::Write, process::ExitCode};
 
 mod callable;
 mod cli;
+mod control_flow;
 mod environments;
 mod expressions;
 mod interpreter;

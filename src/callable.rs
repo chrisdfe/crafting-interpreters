@@ -1,4 +1,5 @@
 use crate::{
+  control_flow::BeaControlFlow,
   interpreter::{Interpreter, RuntimeErr},
   literals::LiteralValue,
   statements::Stmt,
@@ -52,12 +53,14 @@ impl BeaCallable for BeaFn {
         .define(&param.lexeme, arguments[idx].clone());
     }
 
-    interpreter.execute_block(&self.body)?;
+    let value = match interpreter.execute_block(&self.body)? {
+      BeaControlFlow::Return(value) => value,
+      BeaControlFlow::Continue => LiteralValue::Nil,
+    };
 
     interpreter.environment_stack.pop();
 
-    // TODO - ? return values ?
-    Ok(LiteralValue::Nil)
+    Ok(value)
   }
 }
 

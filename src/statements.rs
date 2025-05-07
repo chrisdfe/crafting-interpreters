@@ -14,8 +14,9 @@ pub enum Stmt {
   // condition, thenBranch, elseBranch
   If(Expr, Box<Stmt>, Option<Box<Stmt>>),
 
-  // expression
-  Print(Expr),
+  // keyword (1), value
+  // (1) for error reporting
+  Return(Token, Option<Box<Expr>>),
 
   // name, initializer
   Var(Token, Option<Expr>),
