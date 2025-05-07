@@ -58,7 +58,7 @@ fn interpret_interactive() {
 
 fn read_file(filename: String) -> Result<(), String> {
   let input = match fs::read_to_string(&filename) {
-    Err(_) => return Err(String::from("couldn't read file {file_name}")),
+    Err(_) => return Err(format!("CLI error: couldn't read file {}", filename)),
     Ok(contents) => contents,
   };
 
@@ -81,7 +81,7 @@ fn interpret_input(input: String, interpreter: &mut Interpreter) {
   let statements = match Parser::parse(tokens) {
     Ok(statements) => statements,
     Err(err) => {
-      println!("{}", err.full_text);
+      println!("{}", err.message);
       return;
     }
   };

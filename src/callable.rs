@@ -26,7 +26,7 @@ impl std::fmt::Display for dyn BeaCallable {
 #[derive(Debug)]
 pub struct BeaFn {
   _name: String,
-  env_idx: usize,
+  pub env_idx: usize,
   params: Vec<Token>,
   body: Vec<Stmt>,
 }
@@ -45,16 +45,14 @@ impl BeaCallable for BeaFn {
     interpreter: &mut Interpreter,
     arguments: Vec<LiteralValue>,
   ) -> Result<LiteralValue, RuntimeErr> {
-    todo!();
-
-    // TODO - don't do this pushing/popping anymore
-    interpreter.environment_stack.push();
+    let prev_head = interpreter.environment_stack.get_head_idx();
+    interpreter.environment_stack.set_head_idx(self.env_idx);
 
     // add function arguments to scope
     for (idx, param) in self.params.iter().enumerate() {
       interpreter
         .environment_stack
-        .define_at_head(&param.lexeme, arguments[idx].clone());
+        .define_at_head(&param.lexeme, arguments[idx].clone())?;
     }
 
     let value = match interpreter.execute_block(&self.body)? {
@@ -62,18 +60,19 @@ impl BeaCallable for BeaFn {
       BeaControlFlow::Continue => LiteralValue::Nil,
     };
 
-    interpreter.environment_stack.pop();
+    interpreter.environment_stack.set_head_idx(prev_head);
 
     Ok(value)
   }
 }
 
 impl BeaFn {
-  pub fn new(name: String, params: Vec<Token>, body: Vec<Stmt>) -> Self {
+  pub fn new(name: String, params: Vec<Token>, body: Vec<Stmt>, env_idx: usize) -> Self {
     Self {
       _name: name,
       params,
       body,
+      env_idx,
     }
   }
 }

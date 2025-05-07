@@ -4,6 +4,7 @@ use crate::{interpreter::RuntimeErr, literals::LiteralValue, tokens::Token};
 
 pub type EnvironmentIndex = usize;
 
+#[derive(Debug)]
 pub struct Environment {
   parent_idx: Option<EnvironmentIndex>,
   // TODO - this feels dumb, but I can't derive PartialEq because of LiteralValue::Fn
@@ -14,8 +15,8 @@ pub struct Environment {
 impl Environment {
   fn new(idx: usize, parent_idx: Option<usize>) -> Self {
     Self {
+      idx,
       parent_idx,
-      idx: 0,
       values: HashMap::new(),
     }
   }
@@ -51,6 +52,7 @@ impl Environment {
   }
 }
 
+#[derive(Debug)]
 pub struct EnvironmentStack {
   environments: Vec<Option<Environment>>,
   head_idx: usize,
@@ -66,6 +68,14 @@ impl EnvironmentStack {
     }
   }
 
+  pub fn get_head_idx(&self) -> usize {
+    self.head_idx
+  }
+
+  pub fn set_head_idx(&mut self, new_head_idx: usize) {
+    self.head_idx = new_head_idx;
+  }
+
   pub fn get_parent(&self, env: &Environment) -> Option<&Environment> {
     if let Some(parent_idx) = env.parent_idx {
       if let Some(env) = self.environments.get(parent_idx) {
@@ -78,7 +88,8 @@ impl EnvironmentStack {
     None
   }
 
-  pub fn add_child(&mut self, parent_idx: usize) -> Result<&Environment, RuntimeErr> {
+  /// Pushes a new environment onto the head, with its parent set to parent_idx
+  pub fn push_child(&mut self, parent_idx: usize) -> Result<&Environment, RuntimeErr> {
     if self.environments.get(parent_idx).is_none() {
       return Err(RuntimeErr::new(format!(
         "unable to add new environment: parent at idx '{}' not found",
@@ -95,9 +106,10 @@ impl EnvironmentStack {
     Ok(self.get_env_by_idx_or_err(self.head_idx)?)
   }
 
+  // Pushes a new environment onto the head
   pub fn push(&mut self) -> &Environment {
     let prev_head_idx = self.head_idx;
-    self.head_idx += 1;
+    self.head_idx = self.environments.len();
     let env = Environment::new(self.head_idx, Some(prev_head_idx));
     self.environments.push(Some(env));
 
@@ -105,6 +117,28 @@ impl EnvironmentStack {
     self.get_env_by_idx_or_err(self.head_idx).unwrap()
   }
 
+  /// Clears head environment & sets head idx to its parent
+  pub fn pop(&mut self) -> Result<(), RuntimeErr> {
+    // Prevent popping the global env off
+    if self.environments.len() > 1 {
+      let head_idx = self.head_idx;
+      // TODO - is this always going to be correct?
+      // set head to env's parent
+      let new_head_idx = {
+        let env = self.get_env_by_idx_or_err(self.head_idx)?;
+        // this will only panic if we're popping the global env, in which case we should panic
+        env.parent_idx.unwrap()
+      };
+
+      self.remove_at_idx(head_idx)?;
+
+      self.head_idx = new_head_idx;
+    }
+
+    Ok(())
+  }
+
+  /// Clears (i.e sets to None)
   pub fn remove_at_idx(&mut self, idx: usize) -> Result<(), RuntimeErr> {
     let env = self.get_env_by_idx_or_err(idx)?;
     let idx = env.idx;
@@ -113,26 +147,6 @@ impl EnvironmentStack {
     // Recursively remove children environments as well
     for child_env in self.get_env_idxes_by_parent_idx(idx) {
       self.remove_at_idx(child_env)?;
-    }
-
-    Ok(())
-  }
-
-  pub fn pop(&mut self) -> Result<(), RuntimeErr> {
-    // Prevent popping the global env off
-    if self.environments.len() > 1 {
-      let head_idx = self.head_idx;
-      // TODO - is this always going to be correct?
-      let new_head_idx = {
-        let env = self.get_env_by_idx_or_err(self.head_idx)?;
-        // this will only panic if we're popping the global env, in which case we should panic
-        env.parent_idx.unwrap()
-      };
-
-      // don't remove - closures need to stick around
-      // self.remove_at_idx(head_idx);
-
-      self.head_idx = new_head_idx;
     }
 
     Ok(())
@@ -179,6 +193,31 @@ impl EnvironmentStack {
     self.assign_at_idx(idx, name, value)
   }
 
+  /// Searches for a value, starting with env, and following the tree up
+  /// looking for it until we've reached the global namespace.
+  /// Only returns a RuntimeErr if environment at idx is None -
+  /// if the value isn't found it will Return Ok(None)
+  pub fn get_value_in_env(
+    &self,
+    env_idx: usize,
+    name: &Token,
+  ) -> Result<Option<&LiteralValue>, RuntimeErr> {
+    let env = self.get_env_by_idx_or_err(env_idx)?;
+    let value = if let Some(value) = env.get(name) {
+      Some(value)
+    } else if let Some(parent_idx) = env.parent_idx {
+      self.get_value_in_env(parent_idx, name)?
+    } else {
+      None
+    };
+
+    Ok(value)
+  }
+
+  pub fn get_value_at_head(&self, name: &Token) -> Result<Option<&LiteralValue>, RuntimeErr> {
+    self.get_value_in_env(self.head_idx, name)
+  }
+
   pub fn get_env_by_idx_or_err(&self, idx: usize) -> Result<&Environment, RuntimeErr> {
     if let Some(maybe_env) = self.environments.get(idx) {
       if let Some(env) = maybe_env {
@@ -203,23 +242,6 @@ impl EnvironmentStack {
       "No environment found at idx {}",
       idx
     )));
-  }
-
-  pub fn get_value_in_env_or_err(
-    &self,
-    env_idx: usize,
-    name: &Token,
-  ) -> Result<Option<&LiteralValue>, RuntimeErr> {
-    let env = self.get_env_by_idx_or_err(env_idx)?;
-    Ok(env.get(name))
-  }
-
-  pub fn get_value_at_head_or_err(
-    &self,
-    name: &Token,
-  ) -> Result<Option<&LiteralValue>, RuntimeErr> {
-    let env = self.get_env_by_idx_or_err(self.head_idx)?;
-    Ok(env.get(name))
   }
 
   fn get_env_at_head_or_err(&self) -> Result<&Environment, RuntimeErr> {
@@ -247,7 +269,7 @@ impl EnvironmentStack {
     self
       .environments
       .iter()
-      .filter(|maybe_env| maybe_env.is_none())
+      .filter(|maybe_env| maybe_env.is_some())
       // safe because we just filtered out Nones
       .map(|maybe_env| maybe_env.as_ref().unwrap())
       .filter(|env| {

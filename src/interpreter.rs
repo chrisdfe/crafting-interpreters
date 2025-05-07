@@ -17,29 +17,10 @@ pub struct RuntimeErr {
 
 impl RuntimeErr {
   pub fn new(message: String) -> Self {
+    let message = format!("Runtime Error: {}", message);
+
     Self { message }
   }
-}
-
-pub fn runtime_err(message: String) -> Result<LiteralValue, RuntimeErr> {
-  Err(RuntimeErr::new(message))
-}
-
-fn parse_floats_from_binary_expr(
-  left: &LiteralValue,
-  right: &LiteralValue,
-) -> Result<(f32, f32), RuntimeErr> {
-  let left_as_float = match left.cast_float() {
-    Err(err) => return Err(RuntimeErr::new(err)),
-    Ok(f) => f,
-  };
-
-  let right_as_float = match right.cast_float() {
-    Err(err) => return Err(RuntimeErr::new(err)),
-    Ok(f) => f,
-  };
-
-  Ok((left_as_float, right_as_float))
 }
 
 fn is_string_literal(literal: &LiteralValue) -> bool {
@@ -57,12 +38,14 @@ pub struct Interpreter {
   //        (1) https://craftinginterpreters.com/statements-and-state.html#nesting-and-shadowing
   //        (2) https://craftinginterpreters.com/statements-and-state.html#block-syntax-and-semantics
   pub environment_stack: EnvironmentStack,
+  current_statement: Option<Stmt>,
 }
 
 impl Interpreter {
   pub fn new() -> Self {
     Self {
       environment_stack: EnvironmentStack::new(),
+      current_statement: None,
     }
   }
 
@@ -71,10 +54,11 @@ impl Interpreter {
     self.environment_stack.define_at_head(
       "println",
       LiteralValue::Fn(Rc::new(callable::BeaBuiltinPrintln)),
-    );
+    )?;
 
     // Next - start interpreting
     for stmt in stmts.iter() {
+      self.current_statement = Some(stmt.clone());
       match self.execute_stmt(stmt) {
         Ok(ctrl) => {
           if let BeaControlFlow::Return(value) = ctrl {
@@ -111,7 +95,7 @@ impl Interpreter {
 
         let value = self.execute_block(statements)?;
 
-        self.environment_stack.pop();
+        self.environment_stack.pop()?;
 
         Ok(value)
       }
@@ -150,7 +134,7 @@ impl Interpreter {
           None => LiteralValue::Nil,
         };
 
-        self.environment_stack.define_at_head(&name.lexeme, value);
+        self.environment_stack.define_at_head(&name.lexeme, value)?;
 
         //
         Ok(BeaControlFlow::Continue)
@@ -167,9 +151,14 @@ impl Interpreter {
       }
 
       Function(name, params, body) => {
-        let fn_definition = BeaFn::new(name.clone(), params.clone(), body.clone());
+        let fn_definition = BeaFn::new(
+          name.clone(),
+          params.clone(),
+          body.clone(),
+          self.environment_stack.get_head_idx(),
+        );
         let fn_literal = LiteralValue::Fn(Rc::new(fn_definition));
-        self.environment_stack.define_at_head(name, fn_literal);
+        self.environment_stack.define_at_head(name, fn_literal)?;
 
         Ok(BeaControlFlow::Continue)
       }
@@ -207,20 +196,28 @@ impl Interpreter {
 
       Binary(left, operator, right) => self.evaluate_binary_expr(left, operator, right),
 
-      Variable(name) => self
-        .environment_stack
-        .get_value_at_head_or_err(name)?
-        .cloned(),
+      Variable(name) => {
+        let maybe_value = self.environment_stack.get_value_at_head(name)?.cloned();
+
+        let value = if let Some(value) = maybe_value {
+          value.clone()
+        } else {
+          LiteralValue::Nil
+        };
+
+        Ok(value)
+      }
 
       Call(callee, paren, arguments) => {
         let callee = self.evaluate_expr(callee)?;
+
         let callable = match callee {
           LiteralValue::Fn(callable) => callable,
-          _ => return Err(RuntimeErr::new(format!("Invalid fn callee: {}", callee))),
+          _ => return Err(self.runtime_err(format!("Invalid fn callee: {}", callee))),
         };
 
         if arguments.len() != callable.arity() {
-          return Err(RuntimeErr::new(format!(
+          return Err(self.runtime_err(format!(
             "Expected {} arguments but got {}.",
             callable.arity(),
             arguments.len()
@@ -249,14 +246,14 @@ impl Interpreter {
     use TokenType::*;
     match &operator.token_type {
       Minus => match right.cast_float() {
-        Err(_) => runtime_err(format!(
+        Err(_) => Err(self.runtime_err(format!(
           "Cannot apply unary operator '-' to token {}",
           right
-        )),
+        ))),
         Ok(v) => Ok(LiteralValue::Num(-v)),
       },
       Bang => Ok(right.to_inverse_bool_literal_value()),
-      o => runtime_err(format!("Unexpected unary operator: {:?}", o)),
+      o => Err(self.runtime_err(format!("Unexpected unary operator: {:?}", o))),
     }
   }
 
@@ -272,16 +269,13 @@ impl Interpreter {
     use TokenType::*;
     match &operator.token_type {
       Minus | Star | Slash => {
-        let (left, right) = match parse_floats_from_binary_expr(&left, &right) {
-          Err(err) => return Err(err),
-          Ok((left, right)) => (left, right),
-        };
+        let (left, right) = self.parse_floats_from_binary_expr(&left, &right)?;
 
         match &operator.token_type {
           Minus => Ok(LiteralValue::Num(left - right)),
           Star => Ok(LiteralValue::Num(left * right)),
           Slash => Ok(LiteralValue::Num(left / right)),
-          t => runtime_err(format!("unexpected token type: {:?}", t)),
+          t => Err(self.runtime_err(format!("unexpected token type: {:?}", t))),
         }
       }
 
@@ -297,26 +291,24 @@ impl Interpreter {
         }
 
         // fall back to number
-        let (left, right) = match parse_floats_from_binary_expr(&left, &right) {
-          Err(err) => return Err(err),
-          Ok((left, right)) => (left, right),
-        };
+        let (left, right) = self.parse_floats_from_binary_expr(&left, &right)?;
 
         Ok(LiteralValue::Num(left + right))
       }
 
       Greater | GreaterEqual | Less | LessEqual => {
-        let (left, right) = match parse_floats_from_binary_expr(&left, &right) {
-          Err(err) => return Err(err),
-          Ok((left, right)) => (left, right),
-        };
+        let (left, right) = self.parse_floats_from_binary_expr(&left, &right)?;
 
         let value = match &operator.token_type {
           Greater => left > right,
           GreaterEqual => left >= right,
           Less => left < right,
           LessEqual => left <= right,
-          _ => return runtime_err(format!("Unexpected token type: {:?}", &operator.token_type)),
+          _ => {
+            return Err(
+              self.runtime_err(format!("Unexpected token type: {:?}", &operator.token_type)),
+            )
+          }
         };
 
         let literal_value = if value {
@@ -338,10 +330,33 @@ impl Interpreter {
         Ok(LiteralValue::from(value))
       }
 
-      t => runtime_err(format!(
+      t => Err(self.runtime_err(format!(
         "Unexpected operator in binary expression: '{:?}'",
         t
-      )),
+      ))),
     }
+  }
+
+  fn parse_floats_from_binary_expr(
+    &self,
+    left: &LiteralValue,
+    right: &LiteralValue,
+  ) -> Result<(f32, f32), RuntimeErr> {
+    let left_as_float = match left.cast_float() {
+      Err(err) => return Err(self.runtime_err(err)),
+      Ok(f) => f,
+    };
+
+    let right_as_float = match right.cast_float() {
+      Err(err) => return Err(self.runtime_err(err)),
+      Ok(f) => f,
+    };
+
+    Ok((left_as_float, right_as_float))
+  }
+
+  fn runtime_err(&self, message: String) -> RuntimeErr {
+    let message = format!("{}\n at statement {:?}", message, &self.current_statement);
+    RuntimeErr::new(message)
   }
 }

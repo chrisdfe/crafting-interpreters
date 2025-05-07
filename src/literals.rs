@@ -2,7 +2,7 @@ use std::{fmt::Display, rc::Rc};
 
 use crate::callable::BeaCallable;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum LiteralValue {
   Nil,
   True,

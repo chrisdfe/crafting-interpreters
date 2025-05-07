@@ -1,5 +1,4 @@
 fun fib(n) {
-
   if (n <= 1) {
     return n;
   }
@@ -8,5 +7,5 @@ fun fib(n) {
 }
 
 for (var i = 0; i < 20; i = i + 1) {
-  println(i + ": " + fib(i));
+ println("fib number " + i + ": " + fib(i));
 }

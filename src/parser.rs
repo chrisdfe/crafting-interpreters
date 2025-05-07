@@ -9,20 +9,17 @@ pub type ParseStmtResult = Result<Stmt, ParseErr>;
 pub type ParseExprResult = Result<Box<Expr>, ParseErr>;
 
 pub struct ParseErr {
-  pub full_text: String,
+  pub message: String,
 }
 
 impl ParseErr {
   pub fn new(token: &Token, message: &str) -> Self {
-    let full_text = Self::get_full_text(token, message);
-    ParseErr { full_text }
-  }
-
-  fn get_full_text(token: &Token, message: &str) -> String {
-    format!(
-      "parse error: {} At token '{}' on line {} column {}",
+    let message = format!(
+      "Parse error: {} at token '{}' on line {} column {}",
       &message, &token.lexeme, &token.line, &token.column
-    )
+    );
+
+    ParseErr { message }
   }
 }
 
@@ -71,7 +68,7 @@ impl Parser {
       Ok(stmt) => Ok(Some(stmt)),
       Err(err) => {
         // TODO - should I not print this here?
-        println!("{}", err.full_text);
+        println!("{}", err.message);
         self.synchronize();
         Ok(None)
       }
