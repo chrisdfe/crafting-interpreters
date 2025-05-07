@@ -2,13 +2,20 @@ use std::collections::HashMap;
 
 use crate::{interpreter::RuntimeErr, literals::LiteralValue, tokens::Token};
 
+pub type EnvironmentIndex = usize;
+
 pub struct Environment {
+  parent_idx: Option<EnvironmentIndex>,
+  // TODO - this feels dumb, but I can't derive PartialEq because of LiteralValue::Fn
+  idx: usize,
   values: HashMap<String, LiteralValue>,
 }
 
 impl Environment {
-  fn new() -> Self {
+  fn new(idx: usize, parent_idx: Option<usize>) -> Self {
     Self {
+      parent_idx,
+      idx: 0,
       values: HashMap::new(),
     }
   }
@@ -45,97 +52,212 @@ impl Environment {
 }
 
 pub struct EnvironmentStack {
-  stack: Vec<Environment>,
+  environments: Vec<Option<Environment>>,
+  head_idx: usize,
 }
 
 impl EnvironmentStack {
   pub fn new() -> Self {
-    // this first env = global env
+    let global_env = Some(Environment::new(0, None));
+
     Self {
-      stack: vec![Environment::new()],
+      environments: vec![global_env],
+      head_idx: 0,
     }
   }
 
-  pub fn push(&mut self) -> &Environment {
-    self.stack.push(Environment::new());
-    // unwrap is safe here because we literally just added this env
-    self.stack.last().unwrap()
-  }
-
-  pub fn pop(&mut self) -> Option<Environment> {
-    // Prevent popping the global env off
-    if self.stack.len() > 1 {
-      self.stack.pop()
-    } else {
-      None
-    }
-  }
-
-  pub fn define(&mut self, name: &str, value: LiteralValue) {
-    let current = self.current_mut().unwrap();
-    current.define(name, value);
-  }
-
-  pub fn define_global(&mut self, name: &str, value: LiteralValue) {
-    let globals = self.globals_mut().unwrap();
-    globals.define(name, value);
-  }
-
-  pub fn assign(&mut self, name: &Token, value: LiteralValue) -> Result<&LiteralValue, RuntimeErr> {
-    for env in self.stack.iter_mut().rev() {
-      if env.can_assign(name) {
-        env.assign(name, value).unwrap();
-        return Ok(env.get(name).unwrap());
+  pub fn get_parent(&self, env: &Environment) -> Option<&Environment> {
+    if let Some(parent_idx) = env.parent_idx {
+      if let Some(env) = self.environments.get(parent_idx) {
+        if let Some(env) = env {
+          return Some(env);
+        }
       }
     }
 
-    Err(RuntimeErr::new(format!(
-      "Undefined variable: {}",
-      name.lexeme
-    )))
+    None
   }
 
-  pub fn assign_global(
+  pub fn add_child(&mut self, parent_idx: usize) -> Result<&Environment, RuntimeErr> {
+    if self.environments.get(parent_idx).is_none() {
+      return Err(RuntimeErr::new(format!(
+        "unable to add new environment: parent at idx '{}' not found",
+        parent_idx
+      )));
+    }
+
+    self.head_idx += 1;
+    let env = Environment::new(self.head_idx, Some(parent_idx));
+
+    // TODO - instead of just pushing here, try finding the first idx in self.environments that is None
+    self.environments.push(Some(env));
+
+    Ok(self.get_env_by_idx_or_err(self.head_idx)?)
+  }
+
+  pub fn push(&mut self) -> &Environment {
+    let prev_head_idx = self.head_idx;
+    self.head_idx += 1;
+    let env = Environment::new(self.head_idx, Some(prev_head_idx));
+    self.environments.push(Some(env));
+
+    // unwrap is safe here because we literally just added this env
+    self.get_env_by_idx_or_err(self.head_idx).unwrap()
+  }
+
+  pub fn remove_at_idx(&mut self, idx: usize) -> Result<(), RuntimeErr> {
+    let env = self.get_env_by_idx_or_err(idx)?;
+    let idx = env.idx;
+    self.environments[idx] = None;
+
+    // Recursively remove children environments as well
+    for child_env in self.get_env_idxes_by_parent_idx(idx) {
+      self.remove_at_idx(child_env)?;
+    }
+
+    Ok(())
+  }
+
+  pub fn pop(&mut self) -> Result<(), RuntimeErr> {
+    // Prevent popping the global env off
+    if self.environments.len() > 1 {
+      let head_idx = self.head_idx;
+      // TODO - is this always going to be correct?
+      let new_head_idx = {
+        let env = self.get_env_by_idx_or_err(self.head_idx)?;
+        // this will only panic if we're popping the global env, in which case we should panic
+        env.parent_idx.unwrap()
+      };
+
+      // don't remove - closures need to stick around
+      // self.remove_at_idx(head_idx);
+
+      self.head_idx = new_head_idx;
+    }
+
+    Ok(())
+  }
+
+  pub fn define_at_idx(
+    &mut self,
+    idx: usize,
+    name: &str,
+    value: LiteralValue,
+  ) -> Result<(), RuntimeErr> {
+    let env = self.get_env_by_idx_mut_or_err(idx)?;
+    env.define(name, value);
+    Ok(())
+  }
+
+  pub fn define_at_head(&mut self, name: &str, value: LiteralValue) -> Result<(), RuntimeErr> {
+    self.define_at_idx(self.head_idx, name, value)
+  }
+
+  pub fn assign_at_idx(
+    &mut self,
+    idx: usize,
+    name: &Token,
+    value: LiteralValue,
+  ) -> Result<&LiteralValue, RuntimeErr> {
+    if let Some(idx) = self.get_first_assignable_idx(idx, name, &value)? {
+      let environment = self.get_env_by_idx_mut_or_err(idx)?;
+      environment.assign(name, value)
+    } else {
+      Err(RuntimeErr::new(format!(
+        "Undefined variable: {}",
+        name.lexeme
+      )))
+    }
+  }
+
+  pub fn assign_at_head(
     &mut self,
     name: &Token,
     value: LiteralValue,
   ) -> Result<&LiteralValue, RuntimeErr> {
-    let globals = self.globals_mut()?;
-    globals.assign(name, value)?;
-    Ok(globals.get(name).unwrap())
+    let idx = self.head_idx;
+    self.assign_at_idx(idx, name, value)
   }
 
-  pub fn globals_mut(&mut self) -> Result<&mut Environment, RuntimeErr> {
-    if let Some(env) = self.stack.first_mut() {
-      Ok(env)
-    } else {
-      Err(RuntimeErr::new(String::from(
-        "Somehow ended up with no global environment.",
-      )))
-    }
-  }
-
-  pub fn current_mut(&mut self) -> Result<&mut Environment, RuntimeErr> {
-    if let Some(env) = self.stack.last_mut() {
-      Ok(env)
-    } else {
-      Err(RuntimeErr::new(String::from(
-        "Somehow ended up with an empty environment stack.",
-      )))
-    }
-  }
-
-  pub fn get(&self, name: &Token) -> Result<&LiteralValue, RuntimeErr> {
-    //
-    for env in self.stack.iter().rev() {
-      if let Some(value) = env.get(name) {
-        return Ok(value);
+  pub fn get_env_by_idx_or_err(&self, idx: usize) -> Result<&Environment, RuntimeErr> {
+    if let Some(maybe_env) = self.environments.get(idx) {
+      if let Some(env) = maybe_env {
+        return Ok(env);
       }
     }
 
-    Err(RuntimeErr::new(format!(
-      "Undefined variable: '{}'",
-      &name.lexeme
-    )))
+    return Err(RuntimeErr::new(format!(
+      "No environment found at idx {}",
+      idx
+    )));
+  }
+
+  pub fn get_env_by_idx_mut_or_err(&mut self, idx: usize) -> Result<&mut Environment, RuntimeErr> {
+    if let Some(maybe_env) = self.environments.get_mut(idx) {
+      if let Some(env) = maybe_env {
+        return Ok(env);
+      }
+    }
+
+    return Err(RuntimeErr::new(format!(
+      "No environment found at idx {}",
+      idx
+    )));
+  }
+
+  pub fn get_value_in_env_or_err(
+    &self,
+    env_idx: usize,
+    name: &Token,
+  ) -> Result<Option<&LiteralValue>, RuntimeErr> {
+    let env = self.get_env_by_idx_or_err(env_idx)?;
+    Ok(env.get(name))
+  }
+
+  pub fn get_value_at_head_or_err(
+    &self,
+    name: &Token,
+  ) -> Result<Option<&LiteralValue>, RuntimeErr> {
+    let env = self.get_env_by_idx_or_err(self.head_idx)?;
+    Ok(env.get(name))
+  }
+
+  fn get_env_at_head_or_err(&self) -> Result<&Environment, RuntimeErr> {
+    self.get_env_by_idx_or_err(self.head_idx)
+  }
+
+  // follow the environments up the tree, returning the idx of the first one that can_assign the value
+  fn get_first_assignable_idx(
+    &self,
+    idx: usize,
+    name: &Token,
+    value: &LiteralValue,
+  ) -> Result<Option<usize>, RuntimeErr> {
+    let environment = self.get_env_by_idx_or_err(idx)?;
+    if environment.can_assign(name) {
+      Ok(Some(environment.idx))
+    } else if let Some(parent_idx) = environment.parent_idx {
+      self.get_first_assignable_idx(parent_idx, name, value)
+    } else {
+      Ok(None)
+    }
+  }
+
+  fn get_env_idxes_by_parent_idx(&self, target_parent_idx: usize) -> Vec<usize> {
+    self
+      .environments
+      .iter()
+      .filter(|maybe_env| maybe_env.is_none())
+      // safe because we just filtered out Nones
+      .map(|maybe_env| maybe_env.as_ref().unwrap())
+      .filter(|env| {
+        if let Some(parent_idx) = env.parent_idx {
+          parent_idx == target_parent_idx
+        } else {
+          false
+        }
+      })
+      .map(|env| env.idx)
+      .collect()
   }
 }

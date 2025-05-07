@@ -68,7 +68,7 @@ impl Interpreter {
 
   pub fn interpret(&mut self, stmts: Vec<Stmt>) -> Result<(), RuntimeErr> {
     // First - define globals
-    self.environment_stack.define(
+    self.environment_stack.define_at_head(
       "println",
       LiteralValue::Fn(Rc::new(callable::BeaBuiltinPrintln)),
     );
@@ -150,7 +150,7 @@ impl Interpreter {
           None => LiteralValue::Nil,
         };
 
-        self.environment_stack.define(&name.lexeme, value);
+        self.environment_stack.define_at_head(&name.lexeme, value);
 
         //
         Ok(BeaControlFlow::Continue)
@@ -169,7 +169,7 @@ impl Interpreter {
       Function(name, params, body) => {
         let fn_definition = BeaFn::new(name.clone(), params.clone(), body.clone());
         let fn_literal = LiteralValue::Fn(Rc::new(fn_definition));
-        self.environment_stack.define(name, fn_literal);
+        self.environment_stack.define_at_head(name, fn_literal);
 
         Ok(BeaControlFlow::Continue)
       }
@@ -197,8 +197,8 @@ impl Interpreter {
 
       Assign(name, expr) => {
         let value = self.evaluate_expr(expr)?;
-        self.environment_stack.assign(name, value)?;
-        Ok(self.environment_stack.get(name).unwrap().clone())
+        self.environment_stack.assign_at_head(name, value.clone())?;
+        Ok(value)
       }
 
       Grouping(expr) => self.evaluate_expr(expr),
@@ -207,7 +207,10 @@ impl Interpreter {
 
       Binary(left, operator, right) => self.evaluate_binary_expr(left, operator, right),
 
-      Variable(value) => self.environment_stack.get(value).cloned(),
+      Variable(name) => self
+        .environment_stack
+        .get_value_at_head_or_err(name)?
+        .cloned(),
 
       Call(callee, paren, arguments) => {
         let callee = self.evaluate_expr(callee)?;

@@ -26,6 +26,7 @@ impl std::fmt::Display for dyn BeaCallable {
 #[derive(Debug)]
 pub struct BeaFn {
   _name: String,
+  env_idx: usize,
   params: Vec<Token>,
   body: Vec<Stmt>,
 }
@@ -44,13 +45,16 @@ impl BeaCallable for BeaFn {
     interpreter: &mut Interpreter,
     arguments: Vec<LiteralValue>,
   ) -> Result<LiteralValue, RuntimeErr> {
+    todo!();
+
+    // TODO - don't do this pushing/popping anymore
     interpreter.environment_stack.push();
 
     // add function arguments to scope
     for (idx, param) in self.params.iter().enumerate() {
       interpreter
         .environment_stack
-        .define(&param.lexeme, arguments[idx].clone());
+        .define_at_head(&param.lexeme, arguments[idx].clone());
     }
 
     let value = match interpreter.execute_block(&self.body)? {
