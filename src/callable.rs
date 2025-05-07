@@ -25,8 +25,8 @@ impl std::fmt::Display for dyn BeaCallable {
 
 #[derive(Debug)]
 pub struct BeaFn {
+  pub closure_idx: usize,
   _name: String,
-  pub env_idx: usize,
   params: Vec<Token>,
   body: Vec<Stmt>,
 }
@@ -46,7 +46,8 @@ impl BeaCallable for BeaFn {
     arguments: Vec<LiteralValue>,
   ) -> Result<LiteralValue, RuntimeErr> {
     let prev_head = interpreter.environment_stack.get_head_idx();
-    interpreter.environment_stack.set_head_idx(self.env_idx);
+
+    interpreter.environment_stack.push_child(self.closure_idx)?;
 
     // add function arguments to scope
     for (idx, param) in self.params.iter().enumerate() {
@@ -67,12 +68,12 @@ impl BeaCallable for BeaFn {
 }
 
 impl BeaFn {
-  pub fn new(name: String, params: Vec<Token>, body: Vec<Stmt>, env_idx: usize) -> Self {
+  pub fn new(name: String, params: Vec<Token>, body: Vec<Stmt>, closure_idx: usize) -> Self {
     Self {
       _name: name,
       params,
       body,
-      env_idx,
+      closure_idx,
     }
   }
 }

@@ -151,13 +151,15 @@ impl Interpreter {
       }
 
       Function(name, params, body) => {
-        let fn_definition = BeaFn::new(
-          name.clone(),
-          params.clone(),
-          body.clone(),
-          self.environment_stack.get_head_idx(),
-        );
+        let head_idx = self.environment_stack.get_head_idx();
+
+        // The closure is a child environment to the current one
+        let closure_idx = self.environment_stack.add_detached_child(head_idx)?;
+
+        let fn_definition = BeaFn::new(name.clone(), params.clone(), body.clone(), closure_idx);
+
         let fn_literal = LiteralValue::Fn(Rc::new(fn_definition));
+
         self.environment_stack.define_at_head(name, fn_literal)?;
 
         Ok(BeaControlFlow::Continue)
@@ -356,7 +358,8 @@ impl Interpreter {
   }
 
   fn runtime_err(&self, message: String) -> RuntimeErr {
-    let message = format!("{}\n at statement {:?}", message, &self.current_statement);
+    let message = format!("{}\nat statement {:#?}", message, &self.current_statement);
+    // let message = format!("{}\nenvironment: {:#?}", message, &self.environment_stack);
     RuntimeErr::new(message)
   }
 }
