@@ -296,9 +296,7 @@ impl EnvironmentStack {
     self
       .environments
       .iter()
-      .filter(|maybe_env| maybe_env.is_some())
-      // safe because we just filtered out Nones
-      .map(|maybe_env| maybe_env.as_ref().unwrap())
+      .filter_map(|maybe_env| maybe_env.as_ref())
       .filter(|env| {
         if let Some(parent_idx) = env.parent_idx {
           parent_idx == target_parent_idx
