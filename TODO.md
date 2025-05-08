@@ -8,3 +8,4 @@
 - [ ] create a macro for defining builtins
 - [ ] replace 'var' with 'let'
 - [ ] program doesn't actually exit on a ParseErr
+- [ ] currently environments stay around for the entirety of the program. Depending on what happens next with the book, either redo how they're implemented (Rc, Weak, RefCell, etc) or implement Drop on LiteralValues, or something
