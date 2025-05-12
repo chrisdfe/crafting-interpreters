@@ -32,16 +32,6 @@ impl BeaCallable for BeaFn {
   ) -> Result<LiteralValue, RuntimeErr> {
     let prev_head = interpreter.environment_stack.get_head_idx();
 
-<<<<<<< Updated upstream:src/callable.rs
-=======
-    // println!(
-    //   "calling fn {}. prev head: {}, closure: {}, head: {}",
-    //   self.name(),
-    //   prev_head,
-    //   self.closure_idx,
-    //   interpreter.environment_stack.get_head_idx()
-    // );
->>>>>>> Stashed changes:src/callable/function.rs
     interpreter.environment_stack.push_child(self.closure_idx)?;
 
     // add function arguments to scope
@@ -56,10 +46,6 @@ impl BeaCallable for BeaFn {
       BeaControlFlow::Continue => LiteralValue::Nil,
     };
 
-<<<<<<< Updated upstream:src/callable.rs
-=======
-    // println!("done calling fn. reverting head to {}", prev_head);
->>>>>>> Stashed changes:src/callable/function.rs
     interpreter.environment_stack.set_head_idx(prev_head);
 
     Ok(value)

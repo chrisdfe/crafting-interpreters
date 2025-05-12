@@ -15,6 +15,7 @@ mod expressions;
 mod interpreter;
 mod literals;
 mod parser;
+mod resolver;
 mod scanner;
 mod statements;
 mod tokens;

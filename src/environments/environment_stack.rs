@@ -1,66 +1,6 @@
 use crate::{interpreter::RuntimeErr, literals::LiteralValue, tokens::Token};
 
-<<<<<<< Updated upstream:src/environments.rs
-pub type EnvironmentIndex = usize;
-
-#[derive(Debug)]
-pub struct Environment {
-  parent_idx: Option<EnvironmentIndex>,
-  // TODO - this feels dumb, but I can't derive PartialEq because of LiteralValue::Fn
-  idx: usize,
-  values: HashMap<String, LiteralValue>,
-}
-
-impl Environment {
-  fn new(idx: usize, parent_idx: Option<usize>) -> Self {
-    Self {
-      idx,
-      parent_idx,
-      values: HashMap::new(),
-    }
-  }
-
-  pub fn get_idx(&self) -> usize {
-    self.idx
-  }
-
-  pub fn get_parent_idx(&self) -> &Option<usize> {
-    &self.parent_idx
-  }
-
-  fn define(&mut self, name: &str, value: LiteralValue) {
-    self.values.insert(name.to_string().clone(), value);
-  }
-
-  fn can_assign(&self, name: &Token) -> bool {
-    self.values.contains_key(&name.lexeme)
-  }
-
-  fn assign(&mut self, name: &Token, value: LiteralValue) -> Result<&LiteralValue, RuntimeErr> {
-    if !self.can_assign(name) {
-      return Err(RuntimeErr::new(format!(
-        "Unable to assign variable: {} value: {}",
-        name.lexeme, name.literal
-      )));
-    }
-
-    if self.values.insert(name.lexeme.clone(), value).is_some() {
-      Ok(self.values.get(&name.lexeme).unwrap())
-    } else {
-      Err(RuntimeErr::new(format!(
-        "Unable to assign variable: {} value: {}",
-        name.lexeme, name.literal
-      )))
-    }
-  }
-
-  fn get(&self, name: &Token) -> Option<&LiteralValue> {
-    self.values.get(&name.lexeme)
-  }
-}
-=======
 use super::{Environment, EnvironmentIdx};
->>>>>>> Stashed changes:src/environments/environment_stack.rs
 
 #[derive(Debug)]
 pub struct EnvironmentStack {
@@ -86,10 +26,9 @@ impl EnvironmentStack {
     self.head_idx = new_head_idx;
   }
 
-<<<<<<< Updated upstream:src/environments.rs
   /// Adds a child environment to parent_idx but does NOT update head environment
   /// Returns the index of the new environment
-  pub fn add_detached_child(&mut self, parent_idx: usize) -> Result<EnvironmentIndex, RuntimeErr> {
+  pub fn add_detached_child(&mut self, parent_idx: usize) -> Result<EnvironmentIdx, RuntimeErr> {
     if self.environments.get(parent_idx).is_none() {
       return Err(RuntimeErr::new(format!(
         "unable to add new environment: parent at idx '{}' not found",
@@ -107,14 +46,7 @@ impl EnvironmentStack {
 
   /// Pushes a new environment onto the head with its parent set to parent_idx
   /// Returns the index of the new child
-  pub fn push_child(
-    &mut self,
-    parent_idx: EnvironmentIndex,
-  ) -> Result<EnvironmentIndex, RuntimeErr> {
-=======
-  /// Pushes a new environment onto the head, with its parent set to parent_idx
-  pub fn push_child(&mut self, parent_idx: usize) -> Result<EnvironmentIdx, RuntimeErr> {
->>>>>>> Stashed changes:src/environments/environment_stack.rs
+  pub fn push_child(&mut self, parent_idx: EnvironmentIdx) -> Result<EnvironmentIdx, RuntimeErr> {
     if self.environments.get(parent_idx).is_none() {
       return Err(RuntimeErr::new(format!(
         "unable to add new environment: parent at idx '{}' not found",
@@ -129,14 +61,9 @@ impl EnvironmentStack {
     Ok(self.head_idx)
   }
 
-<<<<<<< Updated upstream:src/environments.rs
   /// Pushes a new environment onto the head
   /// Returns the index of the new environment
-  pub fn push(&mut self) -> EnvironmentIndex {
-=======
-  // Pushes a new environment onto the head
   pub fn push(&mut self) -> EnvironmentIdx {
->>>>>>> Stashed changes:src/environments/environment_stack.rs
     let prev_head_idx = self.head_idx;
     self.head_idx = self.environments.len();
     let env = Environment::new(self.head_idx, Some(prev_head_idx));
@@ -144,10 +71,7 @@ impl EnvironmentStack {
     // TODO - instead of just pushing here, try finding the first idx in self.environments that is None
     self.environments.push(Some(env));
 
-<<<<<<< Updated upstream:src/environments.rs
     // unwrap is safe here because we literally just added this env
-=======
->>>>>>> Stashed changes:src/environments/environment_stack.rs
     self.head_idx
   }
 
@@ -174,13 +98,8 @@ impl EnvironmentStack {
     Ok(())
   }
 
-<<<<<<< Updated upstream:src/environments.rs
-  /// Clears (i.e sets to None) environment at idx
-  pub fn remove_at_idx(&mut self, idx: usize) -> Result<(), RuntimeErr> {
-=======
   /// Clears (i.e sets to None)
   pub fn remove_at_idx(&mut self, idx: EnvironmentIdx) -> Result<(), RuntimeErr> {
->>>>>>> Stashed changes:src/environments/environment_stack.rs
     let env = self.get_env_by_idx_or_err(idx)?;
     let idx = env.idx;
     self.environments[idx] = None;
