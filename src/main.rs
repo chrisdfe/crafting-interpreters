@@ -1,6 +1,6 @@
 #![allow(
   //
-  dead_code,
+  // dead_code,
   unused_variables,
   clippy::borrowed_box
 )]

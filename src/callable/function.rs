@@ -5,23 +5,8 @@ use crate::{
   statements::Stmt,
   tokens::Token,
 };
-use std::fmt::Debug;
 
-pub trait BeaCallable: Debug {
-  fn name(&self) -> String;
-  fn arity(&self) -> usize;
-  fn call(
-    &self,
-    interpreter: &mut Interpreter,
-    arguments: Vec<LiteralValue>,
-  ) -> Result<LiteralValue, RuntimeErr>;
-}
-
-impl std::fmt::Display for dyn BeaCallable {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "<fn {}>", self.name())
-  }
-}
+use super::callable::BeaCallable;
 
 #[derive(Debug)]
 pub struct BeaFn {
@@ -47,6 +32,16 @@ impl BeaCallable for BeaFn {
   ) -> Result<LiteralValue, RuntimeErr> {
     let prev_head = interpreter.environment_stack.get_head_idx();
 
+<<<<<<< Updated upstream:src/callable.rs
+=======
+    // println!(
+    //   "calling fn {}. prev head: {}, closure: {}, head: {}",
+    //   self.name(),
+    //   prev_head,
+    //   self.closure_idx,
+    //   interpreter.environment_stack.get_head_idx()
+    // );
+>>>>>>> Stashed changes:src/callable/function.rs
     interpreter.environment_stack.push_child(self.closure_idx)?;
 
     // add function arguments to scope
@@ -61,6 +56,10 @@ impl BeaCallable for BeaFn {
       BeaControlFlow::Continue => LiteralValue::Nil,
     };
 
+<<<<<<< Updated upstream:src/callable.rs
+=======
+    // println!("done calling fn. reverting head to {}", prev_head);
+>>>>>>> Stashed changes:src/callable/function.rs
     interpreter.environment_stack.set_head_idx(prev_head);
 
     Ok(value)
@@ -75,26 +74,5 @@ impl BeaFn {
       body,
       closure_idx,
     }
-  }
-}
-
-#[derive(Debug)]
-pub struct BeaBuiltinPrintln;
-impl BeaCallable for BeaBuiltinPrintln {
-  fn name(&self) -> String {
-    "println".to_string()
-  }
-
-  fn arity(&self) -> usize {
-    1
-  }
-
-  fn call(
-    &self,
-    interpreter: &mut Interpreter,
-    arguments: Vec<LiteralValue>,
-  ) -> Result<LiteralValue, RuntimeErr> {
-    println!("{}", arguments[0].cast_string());
-    Ok(LiteralValue::Nil)
   }
 }
