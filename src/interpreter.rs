@@ -72,6 +72,10 @@ impl Interpreter {
     Ok(())
   }
 
+  pub fn resolve(&mut self, expression: &Expr, distance: usize) {
+    todo!()
+  }
+
   // Note - the caller is responsible for pushing to/popping off of the environment stack
   pub fn execute_block(&mut self, statements: &Vec<Stmt>) -> Result<BeaControlFlow, RuntimeErr> {
     for statement in statements {
