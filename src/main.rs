@@ -5,6 +5,7 @@
   clippy::borrowed_box
 )]
 
+use cli::get_args;
 use std::{fs, io::Write, process::ExitCode};
 
 mod callable;
@@ -12,17 +13,20 @@ mod cli;
 mod control_flow;
 mod environments;
 mod expressions;
-mod interpreter;
 mod literals;
-mod parser;
-mod resolver;
-mod scanner;
 mod statements;
 mod tokens;
 
-use cli::get_args;
+mod interpreter;
 use interpreter::Interpreter;
+
+mod parser;
 use parser::Parser;
+
+mod resolver;
+use resolver::Resolver;
+
+mod scanner;
 use scanner::Scanner;
 
 fn main() -> ExitCode {
@@ -86,6 +90,15 @@ fn interpret_input(input: String, interpreter: &mut Interpreter) {
       return;
     }
   };
+
+  let mut resolver = Resolver::new();
+  match resolver.resolve_statements(interpreter, &statements) {
+    Ok(()) => (),
+    Err(err) => {
+      println!("{}", err.message);
+      return;
+    }
+  }
 
   match interpreter.interpret(statements) {
     Ok(_) => (),

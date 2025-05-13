@@ -1,4 +1,4 @@
-use crate::{interpreter::RuntimeErr, literals::LiteralValue, tokens::Token};
+use crate::{interpreter::RuntimeErr, literals::LiteralValue};
 
 use super::{Environment, EnvironmentIdx};
 
@@ -55,7 +55,7 @@ impl EnvironmentStack {
     }
 
     self.push();
-    let head = self.get_env_at_head_mut_or_err()?;
+    let head = self.get_env_at_head_mut()?;
     head.parent_idx = Some(parent_idx);
 
     Ok(self.head_idx)
@@ -85,7 +85,7 @@ impl EnvironmentStack {
       // TODO - is this always going to be correct?
       // set head to env's parent
       let new_head_idx = {
-        let env = self.get_env_by_idx_or_err(self.head_idx)?;
+        let env = self.get_env_by_idx(self.head_idx)?;
         // this will only panic if we're popping the global env, in which case we should panic
         env.parent_idx.unwrap()
       };
@@ -100,7 +100,7 @@ impl EnvironmentStack {
 
   /// Clears (i.e sets to None)
   pub fn remove_at_idx(&mut self, idx: EnvironmentIdx) -> Result<(), RuntimeErr> {
-    let env = self.get_env_by_idx_or_err(idx)?;
+    let env = self.get_env_by_idx(idx)?;
     let idx = env.idx;
     self.environments[idx] = None;
 
@@ -119,7 +119,7 @@ impl EnvironmentStack {
     name: &str,
     value: LiteralValue,
   ) -> Result<(), RuntimeErr> {
-    let env = self.get_env_by_idx_mut_or_err(idx)?;
+    let env = self.get_env_by_idx_mut(idx)?;
     env.define(name, value);
     Ok(())
   }
@@ -133,28 +133,46 @@ impl EnvironmentStack {
   pub fn assign_at_idx(
     &mut self,
     idx: EnvironmentIdx,
-    name: &Token,
+    name: &str,
     value: LiteralValue,
   ) -> Result<&LiteralValue, RuntimeErr> {
     if let Some(idx) = self.get_first_assignable_idx(idx, name)? {
-      let environment = self.get_env_by_idx_mut_or_err(idx)?;
+      let environment = self.get_env_by_idx_mut(idx)?;
       environment.assign(name, value)
     } else {
-      Err(RuntimeErr::new(format!(
-        "Undefined variable: {}",
-        name.lexeme
-      )))
+      Err(RuntimeErr::new(format!("Undefined variable: {}", name)))
     }
   }
 
   /// Assigns a variable at the head env
   pub fn assign_at_head(
     &mut self,
-    name: &Token,
+    name: &str,
     value: LiteralValue,
   ) -> Result<&LiteralValue, RuntimeErr> {
     let idx = self.head_idx;
     self.assign_at_idx(idx, name, value)
+  }
+
+  pub fn assign_at_distance(
+    &mut self,
+    name: &str,
+    value: LiteralValue,
+    distance: usize,
+  ) -> Result<(), RuntimeErr> {
+    //
+    if let Some(ancestor) = self.get_ancestor_at_distance_mut(distance)? {
+      //
+      ancestor.define(name, value);
+    }
+
+    Ok(())
+  }
+
+  pub fn assign_global(&mut self, name: &str, value: LiteralValue) -> Result<(), RuntimeErr> {
+    let global_env = self.get_global_env_mut()?;
+    global_env.assign(name, value)?;
+    Ok(())
   }
 
   /// Searches for a value, starting with env, and following the tree up
@@ -164,9 +182,9 @@ impl EnvironmentStack {
   pub fn get_value_in_env(
     &self,
     env_idx: EnvironmentIdx,
-    name: &Token,
+    name: &str,
   ) -> Result<Option<&LiteralValue>, RuntimeErr> {
-    let env = self.get_env_by_idx_or_err(env_idx)?;
+    let env = self.get_env_by_idx(env_idx)?;
     let value = if let Some(value) = env.get(name) {
       Some(value)
     } else if let Some(parent_idx) = env.parent_idx {
@@ -179,11 +197,11 @@ impl EnvironmentStack {
   }
 
   /// Searches recursively for a variable
-  pub fn get_value_at_head(&self, name: &Token) -> Result<Option<&LiteralValue>, RuntimeErr> {
+  pub fn get_value_at_head(&self, name: &str) -> Result<Option<&LiteralValue>, RuntimeErr> {
     self.get_value_in_env(self.head_idx, name)
   }
 
-  pub fn get_env_by_idx_or_err(&self, idx: usize) -> Result<&Environment, RuntimeErr> {
+  pub fn get_env_by_idx(&self, idx: usize) -> Result<&Environment, RuntimeErr> {
     if let Some(maybe_env) = self.environments.get(idx) {
       if let Some(env) = maybe_env {
         return Ok(env);
@@ -196,7 +214,7 @@ impl EnvironmentStack {
     )))
   }
 
-  pub fn get_env_by_idx_mut_or_err(&mut self, idx: usize) -> Result<&mut Environment, RuntimeErr> {
+  pub fn get_env_by_idx_mut(&mut self, idx: usize) -> Result<&mut Environment, RuntimeErr> {
     if let Some(maybe_env) = self.environments.get_mut(idx) {
       if let Some(env) = maybe_env {
         return Ok(env);
@@ -209,17 +227,82 @@ impl EnvironmentStack {
     )))
   }
 
-  fn get_env_at_head_mut_or_err(&mut self) -> Result<&mut Environment, RuntimeErr> {
-    self.get_env_by_idx_mut_or_err(self.head_idx)
+  pub fn get_global_env(&self) -> Result<&Environment, RuntimeErr> {
+    if let Some(env) = self.environments.get(0) {
+      if let Some(env) = env {
+        return Ok(env);
+      }
+    }
+
+    Err(RuntimeErr::new(
+      "Unable to find global environment".to_string(),
+    ))
+  }
+
+  pub fn get_global_env_mut(&mut self) -> Result<&mut Environment, RuntimeErr> {
+    if let Some(env) = self.environments.get_mut(0) {
+      if let Some(env) = env {
+        return Ok(env);
+      }
+    }
+
+    Err(RuntimeErr::new(
+      "Unable to find global environment".to_string(),
+    ))
+  }
+
+  pub fn get_global_value(&self, name: &str) -> Result<Option<&LiteralValue>, RuntimeErr> {
+    let global_env = self.get_global_env()?;
+    Ok(global_env.get(name))
+  }
+
+  /// Sets value in ancestor distance away from head
+  pub fn get_value_at_distance(
+    &mut self,
+    name: &str,
+    distance: usize,
+  ) -> Result<Option<&LiteralValue>, RuntimeErr> {
+    if let Some(env) = self.get_ancestor_at_distance_mut(distance)? {
+      Ok(env.get(name))
+    } else {
+      Ok(None)
+    }
+  }
+
+  fn get_ancestor_at_distance_mut(
+    &mut self,
+    distance: usize,
+  ) -> Result<Option<&mut Environment>, RuntimeErr> {
+    let mut env_idx = self.head_idx;
+
+    for i in 0..distance {
+      if let Ok(env) = self.get_env_by_idx(env_idx) {
+        if let Some(parent_idx) = env.parent_idx {
+          let parent_env = self.get_env_by_idx(parent_idx)?;
+          env_idx = parent_env.idx;
+        } else {
+          return Ok(None);
+        }
+      } else {
+        return Ok(None);
+      }
+    }
+
+    let env = self.get_env_by_idx_mut(env_idx)?;
+    Ok(Some(env))
+  }
+
+  fn get_env_at_head(&self) -> Result<&Environment, RuntimeErr> {
+    self.get_env_by_idx(self.head_idx)
+  }
+
+  fn get_env_at_head_mut(&mut self) -> Result<&mut Environment, RuntimeErr> {
+    self.get_env_by_idx_mut(self.head_idx)
   }
 
   // follow the environments up the tree, returning the idx of the first one that can_assign the value
-  fn get_first_assignable_idx(
-    &self,
-    idx: usize,
-    name: &Token,
-  ) -> Result<Option<usize>, RuntimeErr> {
-    let environment = self.get_env_by_idx_or_err(idx)?;
+  fn get_first_assignable_idx(&self, idx: usize, name: &str) -> Result<Option<usize>, RuntimeErr> {
+    let environment = self.get_env_by_idx(idx)?;
     if environment.can_assign(name) {
       Ok(Some(environment.idx))
     } else if let Some(parent_idx) = environment.parent_idx {

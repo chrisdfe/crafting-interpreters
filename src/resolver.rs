@@ -20,6 +20,10 @@ pub struct Resolver {
 }
 
 impl Resolver {
+  pub fn new() -> Self {
+    Self { scopes: Vec::new() }
+  }
+
   pub fn resolve_statements(
     &mut self,
     interpreter: &mut Interpreter,
@@ -152,7 +156,7 @@ impl Resolver {
     for i in self.scopes.len() - 1..0 {
       let scope = self.scopes.get(i).unwrap();
       if scope.contains_key(&name.lexeme) {
-        interpreter.resolve(expression, self.scopes.len() - 1 - i);
+        interpreter.resolve(&name.lexeme, self.scopes.len() - 1 - i);
       }
     }
   }

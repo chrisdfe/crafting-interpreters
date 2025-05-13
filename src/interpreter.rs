@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
   callable::{self, BeaFn},
@@ -39,6 +39,9 @@ pub struct Interpreter {
   //        (2) https://craftinginterpreters.com/statements-and-state.html#block-syntax-and-semantics
   pub environment_stack: EnvironmentStack,
   current_statement: Option<Stmt>,
+  // TODO - get this to work
+  // maybe make BeaCallable an enum?
+  locals: HashMap<Expr, usize>,
 }
 
 impl Interpreter {
@@ -46,6 +49,7 @@ impl Interpreter {
     Self {
       environment_stack: EnvironmentStack::new(),
       current_statement: None,
+      locals: HashMap::new(),
     }
   }
 
@@ -72,8 +76,8 @@ impl Interpreter {
     Ok(())
   }
 
-  pub fn resolve(&mut self, expression: &Expr, distance: usize) {
-    todo!()
+  pub fn resolve(&mut self, name: &str, distance: usize) {
+    self.locals.insert(name.to_string().clone(), distance);
   }
 
   // Note - the caller is responsible for pushing to/popping off of the environment stack
@@ -192,8 +196,17 @@ impl Interpreter {
 
       Assign(name, expr) => {
         let value = self.evaluate_expr(expr)?;
-        self.environment_stack.assign_at_head(name, value.clone())?;
-        Ok(value)
+
+        let ret_value = value.clone();
+        if let Some(distance) = self.locals.get(&name.lexeme) {
+          self
+            .environment_stack
+            .assign_at_distance(&name.lexeme, value, *distance)?;
+        } else {
+          self.environment_stack.assign_global(&name.lexeme, value)?;
+        }
+
+        Ok(ret_value)
       }
 
       Grouping(expr) => self.evaluate_expr(expr),
@@ -202,17 +215,7 @@ impl Interpreter {
 
       Binary(left, operator, right) => self.evaluate_binary_expr(left, operator, right),
 
-      Variable(name) => {
-        let maybe_value = self.environment_stack.get_value_at_head(name)?.cloned();
-
-        let value = if let Some(value) = maybe_value {
-          value.clone()
-        } else {
-          LiteralValue::Nil
-        };
-
-        Ok(value)
-      }
+      Variable(name) => self.look_up_variable(name /* , &expr */),
 
       Call(callee, paren, arguments) => {
         let callee = self.evaluate_expr(callee)?;
@@ -239,6 +242,27 @@ impl Interpreter {
 
         Ok(return_value)
       }
+    }
+  }
+
+  fn look_up_variable(
+    &mut self,
+    name: &Token,
+    /* expr: &Expr */
+  ) -> Result<LiteralValue, RuntimeErr> {
+    // TODO - the book uses expr as the key for self.locals, which I don't think I can do here
+    let maybe_value = if let Some(distance) = self.locals.get(&name.lexeme.to_string()) {
+      self
+        .environment_stack
+        .get_value_at_distance(&name.lexeme, *distance)?
+    } else {
+      self.environment_stack.get_global_value(&name.lexeme)?
+    };
+
+    if let Some(value) = maybe_value {
+      Ok(value.clone())
+    } else {
+      Ok(LiteralValue::Nil)
     }
   }
 

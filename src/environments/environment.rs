@@ -25,29 +25,35 @@ impl Environment {
     self.values.insert(name.to_string().clone(), value);
   }
 
-  pub fn can_assign(&self, name: &Token) -> bool {
-    self.values.contains_key(&name.lexeme)
+  pub fn can_assign(&self, name: &str) -> bool {
+    self.values.contains_key(name)
   }
 
-  pub fn assign(&mut self, name: &Token, value: LiteralValue) -> Result<&LiteralValue, RuntimeErr> {
-    if !self.can_assign(name) {
+  pub fn assign(&mut self, name: &str, value: LiteralValue) -> Result<&LiteralValue, RuntimeErr> {
+    if !self.can_assign(&name) {
       return Err(RuntimeErr::new(format!(
         "Unable to assign variable: {} value: {}",
-        name.lexeme, value
+        name, value
       )));
     }
 
-    if self.values.insert(name.lexeme.clone(), value).is_some() {
-      Ok(self.values.get(&name.lexeme).unwrap())
+    let err_value = value.clone();
+
+    if self
+      .values
+      .insert(name.to_string().clone(), value)
+      .is_some()
+    {
+      Ok(self.values.get(&name.to_string()).unwrap())
     } else {
       Err(RuntimeErr::new(format!(
         "Unable to assign variable: {} value: {}",
-        name.lexeme, name.literal
+        name, err_value
       )))
     }
   }
 
-  pub fn get(&self, name: &Token) -> Option<&LiteralValue> {
-    self.values.get(&name.lexeme)
+  pub fn get(&self, name: &str) -> Option<&LiteralValue> {
+    self.values.get(name)
   }
 }

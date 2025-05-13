@@ -1,8 +1,6 @@
 use crate::{literals::LiteralValue, tokens::Token};
 
-// https://craftinginterpreters.com/representing-code.html#metaprogramming-the-trees
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
   Literal(LiteralValue),
 
