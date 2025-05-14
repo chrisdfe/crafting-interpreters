@@ -1,6 +1,17 @@
 use std::{fmt::Display, rc::Rc};
 
-use crate::callable::BeaCallable;
+use crate::callable::Callable;
+
+/// Basic 'C-style' enum representing a valueless type of LiteralValue
+#[derive(Debug, PartialEq)]
+pub enum LiteralValueType {
+  Nil,
+  True,
+  False,
+  Num,
+  Str,
+  Fn,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LiteralValue {
@@ -9,7 +20,8 @@ pub enum LiteralValue {
   False,
   Num(f32),
   Str(String),
-  Fn(Rc<dyn BeaCallable>),
+  // TODO - is Rc still the right type for this
+  Fn(Rc<Callable>),
 }
 
 impl Display for LiteralValue {
@@ -21,7 +33,7 @@ impl Display for LiteralValue {
       False => write!(f, "false"),
       Str(s) => write!(f, "{}", s),
       Num(n) => write!(f, "{}", n),
-      Fn(callable) => write!(f, "<fn {}>", callable.name()),
+      Fn(callable) => write!(f, "<fn {}>", callable.name),
     }
   }
 }
@@ -45,7 +57,7 @@ impl LiteralValue {
       False => String::from("false"),
       Num(n) => format!("{}", n),
       Str(s) => s.clone(),
-      Fn(callable) => format!("<fn {}>", callable.name()),
+      Fn(callable) => format!("<fn {}>", callable.name),
     }
   }
 

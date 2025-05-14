@@ -1,6 +1,6 @@
 use crate::{expressions::Expr, tokens::Token};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
   // statements
   Block(Vec<Stmt>),

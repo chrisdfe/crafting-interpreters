@@ -57,7 +57,7 @@ impl Interpreter {
     // First - define globals
     self.environment_stack.define_at_head(
       "println",
-      LiteralValue::Fn(Rc::new(callable::builtins::BeaBuiltinPrintln)),
+      LiteralValue::Fn(Rc::new(callable::builtins::get_builtin_println())),
     )?;
 
     // Next - start interpreting

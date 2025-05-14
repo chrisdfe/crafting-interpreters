@@ -1,7 +1,7 @@
 mod callable;
-pub use callable::BeaCallable;
+pub use callable::Callable;
 
 mod function;
-pub use function::BeaFn;
+pub use function::create_bea_fn;
 
 pub mod builtins;
